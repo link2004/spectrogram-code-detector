@@ -121,8 +121,8 @@ class AudioStreamVisualizer:
     
     def detect_code_from_pitch(self,frequency):
         """周波数から文字を検出します（周波数の範囲は2000Hzから4000Hz未満とします）。"""
-        MIN = 2000
-        MAX = 7000
+        MIN = 4000
+        MAX = 8000
         CODE = 'abcdefghijklmnopqrstuvwxyz1234567890'
         if MIN <= frequency < MAX:
             index = (frequency - MIN) // ((MAX-MIN)/len(CODE)) # インデックスを計算
