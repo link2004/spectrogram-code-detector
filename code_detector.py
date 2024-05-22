@@ -15,6 +15,7 @@ class AudioStreamVisualizer:
         self.init_audio_stream()
         self.setup_gui()
         self.setup_timer()
+        self.previous_code = ''
 
     def init_audio_stream(self):
         """オーディオストリームを初期化します。"""
@@ -68,8 +69,10 @@ class AudioStreamVisualizer:
             code = self.detect_code_from_pitch(frequency)
             # print(code, end='', flush=True)
             variance = self.compute_variance(fft_data)
-            if np.abs(variance) < 6:
+
+            if np.abs(variance) < 6 and code != '' and code != self.previous_code:
                 print(code, end='', flush=True)
+                self.previous_code = code
         except Exception as e:
             print(f"エラーが発生しました: {str(e)}")
 
