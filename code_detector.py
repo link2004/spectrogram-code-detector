@@ -58,21 +58,27 @@ class AudioStreamVisualizer:
             # 1000Hz以下の周波数成分をカット
             fft_data = self.high_path_filter(fft_data, 1000)
 
-            # fft_dataの20値以下(小さな音)をカット
-            fft_data = np.where(fft_data < 35, 0, fft_data)
+            # 30未満の値を0に変換（ノイズ除去）
+            fft_data = np.where(fft_data < 30, 0, fft_data)
+
+            # 正規化 (0-1の範囲に収める)
+            fft_data = self.normalize(fft_data)
+            
+            # 0.8未満の値を0に変換
+            fft_data = np.where(fft_data < 0.8, 0, fft_data)
 
             self.update_spectrogram(fft_data)
 
             frequency = self.detect_pitch(fft_data)
-            # print(f"Frequency: {frequency:.2f} Hz")
 
             code = self.detect_code_from_pitch(frequency)
             # print(code, end='', flush=True)
             variance = self.compute_variance(fft_data)
-
-            if np.abs(variance) < 6 and code != '' and code != self.previous_code:
+            if np.abs(variance) < 6.5 and code != '' and code != self.previous_code:
                 print(code, end='', flush=True)
                 self.previous_code = code
+            else: 
+                print('^', end='', flush=True)
         except Exception as e:
             print(f"エラーが発生しました: {str(e)}")
 
@@ -113,19 +119,25 @@ class AudioStreamVisualizer:
         mean_frequency = weighted_sum / total_amplitude
 
         return mean_frequency
+    
+    def normalize(self, fft_data):
+        """FFTデータを正規化"""
+        fft_data = np.where(fft_data < 0, 0, fft_data)
+        max = np.max(fft_data)
+        if max != 0:
+            fft_data = fft_data / max
+        return fft_data
 
     def detect_pitch(self, fft_data):
         """FFTデータからピッチを検出"""
         index = np.argmax(fft_data)
-        if fft_data[index] < 40:
-            return 0
         frequency = index * self.RATE / self.CHUNK
         return frequency
     
     def detect_code_from_pitch(self,frequency):
         """周波数から文字を検出します（周波数の範囲は2000Hzから4000Hz未満とします）。"""
-        MIN = 4000
-        MAX = 8000
+        MIN = 2000
+        MAX = 7900
         CODE = 'abcdefghijklmnopqrstuvwxyz1234567890'
         if MIN <= frequency < MAX:
             index = (frequency - MIN) // ((MAX-MIN)/len(CODE)) # インデックスを計算
@@ -143,7 +155,7 @@ class AudioStreamVisualizer:
         """スペクトログラムデータを更新"""
         self.spectrogram_data = np.roll(self.spectrogram_data, 1, axis=0)
         self.spectrogram_data[0, :] = fft_data
-        self.spectrogram.setImage(self.spectrogram_data, autoLevels=False, levels=(10, 40))
+        self.spectrogram.setImage(self.spectrogram_data, autoLevels=False, levels=(0, 1))
 
     def start(self):
         """イベントループを開始"""
