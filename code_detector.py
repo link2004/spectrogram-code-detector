@@ -72,13 +72,15 @@ class AudioStreamVisualizer:
             frequency = self.detect_pitch(fft_data)
 
             code = self.detect_code_from_pitch(frequency)
-            # print(code, end='', flush=True)
+            
             variance = self.compute_variance(fft_data)
-            if np.abs(variance) < 6.5 and code != '' and code != self.previous_code:
+            # print(code, end='', flush=True)
+            if 0 < np.abs(variance) < 4 and code != '' and code != self.previous_code:
                 print(code, end='', flush=True)
                 self.previous_code = code
-            else: 
-                print('^', end='', flush=True)
+            # else: 
+            #     print('^', end='', flush=True)
+            # print(f"{variance:.2f}", end='|', flush=True)
         except Exception as e:
             print(f"エラーが発生しました: {str(e)}")
 
