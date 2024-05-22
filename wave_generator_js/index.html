@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>周波数サウンドジェネレーター</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f7f7f7;
+      }
+
+      .container {
+        width: 90%;
+        max-width: 600px;
+        background: #fff;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        text-align: center;
+      }
+
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      button {
+        width: 40px;
+        height: 40px;
+        font-size: 1em;
+        margin: 5px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        background-color: #4caf50;
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="buttons">
+        <!-- ボタンを動的に生成 -->
+        <script>
+          const characters = "abcdefghijklmnopqrstuvwxyz1234567890";
+          characters.split("").forEach((char) => {
+            document.write(
+              `<button class="sound-button" data-char="${char}">${char}</button>`
+            );
+          });
+        </script>
+      </div>
+    </div>
+
+    <script>
+      let audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+
+      function playFrequency(frequency, duration) {
+        let oscillator = audioContext.createOscillator();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(
+          frequency,
+          audioContext.currentTime
+        );
+        oscillator.connect(audioContext.destination);
+        oscillator.start();
+        setTimeout(() => oscillator.stop(), duration);
+      }
+
+      function getFrequencyFromChar(char) {
+        const MIN = 4000;
+        const MAX = 8000;
+        const CODE = "abcdefghijklmnopqrstuvwxyz1234567890";
+        let index = CODE.indexOf(char);
+        if (index !== -1) {
+          let frequency = MIN + index * ((MAX - MIN) / CODE.length);
+          return frequency + (MAX - MIN) / CODE.length / 2;
+        }
+        return 0; // 無効な文字の場合は0を返す
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const buttons = document.querySelectorAll(".sound-button");
+        buttons.forEach((button) => {
+          button.addEventListener("click", () => {
+            const char = button.getAttribute("data-char");
+            const frequency = getFrequencyFromChar(char);
+            playFrequency(frequency, 100); // 0.1秒再生
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
