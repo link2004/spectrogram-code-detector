@@ -73,7 +73,8 @@ class AudioStreamVisualizer:
 
             code = self.detect_code_from_pitch(pitch)
             
-            variance = self.compute_variance(fft_data)
+            # pitchとの分散を計算
+            variance = self.compute_variance(fft_data,pitch)
             # print(code, end='', flush=True)
             if 0 < np.abs(variance) < 4 and code != '' and code != self.previous_code:
                 print(code, end='', flush=True)
@@ -93,11 +94,9 @@ class AudioStreamVisualizer:
         return fft_magnitude
     
     # 分散を計算
-    def compute_variance(self, fft_data):
+    def compute_variance(self, fft_data,pitch):
         # 周波数の配列 [0,]
         frequencies = np.arange(0, self.RATE//2+1, self.RATE/self.CHUNK)
-        # 最大周波数を計算
-        pitch = self.detect_pitch(fft_data)
         # 分散を計算
         variance = np.sum((frequencies - pitch)**2 * fft_data)
         if variance == 0:
