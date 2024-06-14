@@ -69,9 +69,9 @@ class AudioStreamVisualizer:
 
             self.update_spectrogram(fft_data)
 
-            frequency = self.detect_pitch(fft_data)
+            pitch = self.detect_pitch(fft_data)
 
-            code = self.detect_code_from_pitch(frequency)
+            code = self.detect_code_from_pitch(pitch)
             
             variance = self.compute_variance(fft_data)
             # print(code, end='', flush=True)
