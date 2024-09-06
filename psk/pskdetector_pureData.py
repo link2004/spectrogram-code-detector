@@ -52,8 +52,6 @@ def detect_phase_shifting_sine_multiply(audio, sample_rate, frequency, switch_in
     :param input_file: 入力WAVファイルの名前
     :return: 復調されたメッセージ
     """
-    print("=== 位相シフトサイン波の復調を開始します ===")
-
 
     # 正規化
     audio = audio / np.max(audio)
@@ -114,25 +112,31 @@ def main():
     メイン関数：位相シフトサイン波復調のデモンストレーション
     """
     input_file = "440hz_and_880hz.wav"  # 入力ファイル名
-    frequency = 880  # 周波数 (Hz)
-    switch_interval = 32  # 位相反転間隔 (周期数)
+    parameters = [
+        {"frequency": 880, "switch_interval": 32, "center_freq": 880, "guard_band_width": 220},
+        {"frequency": 440, "switch_interval": 16, "center_freq": 440, "guard_band_width": 220}
+    ]
 
     print(f"入力ファイル: {input_file}")
-    print(f"パラメータ設定:\n周波数: {frequency}Hz\n位相反転間隔: {switch_interval}周期\n")
-
-    # フィルタリング
-    # filtered_audio = bandpass_filter(input_file, 880, 220)
+    print("パラメータ設定:")
+    for i, param in enumerate(parameters, 1):
+        print(f"パラメータセット {i}:")
+        print(f"  周波数: {param['frequency']}Hz")
+        print(f"  位相反転間隔: {param['switch_interval']}周期")
+        print(f"  中心周波数: {param['center_freq']}Hz")
+        print(f"  ガードバンド幅: {param['guard_band_width']}Hz\n")
 
     # 音声データを読み込む
     sample_rate, audio = read_wav_file(input_file)
 
-    # フィルタリング
-    filtered_audio = bandpass_filter(audio, sample_rate, 880, 220)
+    for i, param in enumerate(parameters, 1):
+        # フィルタリング
+        filtered_audio = bandpass_filter(audio, sample_rate, param['center_freq'], param['guard_band_width'])
 
-    # 位相シフトサイン波の復調
-    detected_message = detect_phase_shifting_sine_multiply(filtered_audio, sample_rate, frequency, switch_interval)
+        # 位相シフトサイン波の復調
+        detected_message = detect_phase_shifting_sine_multiply(filtered_audio, sample_rate, param['frequency'], param['switch_interval'])
 
-    print(f"復調されたメッセージ: {detected_message}")
+        print(f"パラメータセット {i} の復調されたメッセージ: {detected_message}")
 
 if __name__ == "__main__":
     main()
