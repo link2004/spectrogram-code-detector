@@ -102,8 +102,8 @@
         let delay = 0;
         text.split("").forEach((char) => {
           const frequency = getFrequencyFromChar(char);
-          setTimeout(() => playFrequency(frequency, 20), delay);
-          delay += 64; // 0.11秒の間隔
+          setTimeout(() => playFrequency(frequency, 25), delay);
+          delay += 100; // 0.11秒の間隔
         });
       }
 

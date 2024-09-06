@@ -6,7 +6,7 @@ from PyQt5 import QtWidgets, QtCore
 class AudioStreamVisualizer:
     """リアルタイムで音声データのスペクトログラムをグラフィカルに表示するクラスです。"""
 
-    def __init__(self, chunk=1024, format=pyaudio.paInt16, channels=1, rate=16000, history_length=100):
+    def __init__(self, chunk=1600, format=pyaudio.paInt16, channels=1, rate=16000, history_length=100):
         self.CHUNK = chunk
         self.FORMAT = format
         self.CHANNELS = channels
@@ -79,8 +79,8 @@ class AudioStreamVisualizer:
             if 0 < np.abs(variance) < 4 and code != '' and code != self.previous_code:
                 print(code, end='', flush=True)
                 self.previous_code = code
-            # else: 
-            #     print('^', end='', flush=True)
+            else: 
+                print('^', end='', flush=True)
             # print(f"{variance:.2f}", end='|', flush=True)
         except Exception as e:
             print(f"エラーが発生しました: {str(e)}")

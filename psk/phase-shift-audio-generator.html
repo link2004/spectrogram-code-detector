@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>位相シフト音声生成器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        label, input, button {
+            display: block;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>位相シフト音声生成器</h1>
+    <label for="frequency">周波数 (Hz):</label>
+    <input type="number" id="frequency" value="440" min="20" max="20000">
+    
+    <label for="phase">位相 (度):</label>
+    <input type="number" id="phase" value="0" min="0" max="360">
+    
+    <button onclick="playSound()">音を再生</button>
+    <button onclick="stopSound()">停止</button>
+
+    <script>
+        let audioContext;
+        let oscillator;
+
+        function playSound() {
+            if (audioContext) {
+                stopSound();
+            }
+
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            oscillator = audioContext.createOscillator();
+
+            const frequency = parseFloat(document.getElementById('frequency').value);
+            const phase = parseFloat(document.getElementById('phase').value);
+
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            // 位相シフトの適用
+            const phaseShift = phase * Math.PI / 180; // 度からラジアンに変換
+            const realCoeff = new Float32Array(2);
+            const imagCoeff = new Float32Array(2);
+            
+            realCoeff[0] = 0; // DC offset
+            realCoeff[1] = Math.cos(phaseShift);
+            imagCoeff[0] = 0; // DC offset for imag should always be 0
+            imagCoeff[1] = Math.sin(phaseShift);
+
+            const wave = audioContext.createPeriodicWave(realCoeff, imagCoeff, {disableNormalization: true});
+            oscillator.setPeriodicWave(wave);
+
+            oscillator.connect(audioContext.destination);
+            oscillator.start();
+        }
+
+        function stopSound() {
+            if (oscillator) {
+                oscillator.stop();
+                oscillator.disconnect();
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+        }
+    </script>
+</body>
+</html>
