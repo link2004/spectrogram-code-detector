@@ -2,6 +2,11 @@ import numpy as np
 from scipy.io import wavfile
 import time
 
+def output_wav_file(audio, sample_rate, output_file):
+    wavfile.write(output_file, sample_rate, audio)
+    print(f"\n音声データをWAVファイル '{output_file}' として保存しました")
+
+
 #bpskの01埋め込みデータから位相の01に変換するアルゴリズム
 #例：00110100010→000100111100
 def binary_to_bpsk_phase(binary_message):
@@ -14,7 +19,7 @@ def binary_to_bpsk_phase(binary_message):
     
     return phase_data
 
-def generate_phase_shifting_sine(frequency, sample_rate, switch_interval, binary_message, output_file):
+def generate_phase_shifting_sine(frequency, sample_rate, switch_interval, binary_message):
     """
     位相を定期的に反転させるsin波の音を生成し、メッセージを埋め込んでWAVファイルとして出力する関数
 
@@ -64,29 +69,93 @@ def generate_phase_shifting_sine(frequency, sample_rate, switch_interval, binary
     # 16ビット整数に変換
     audio = (phase_shifting_sine * 32767).astype(np.int16)
 
-    # WAVファイルとして出力
-    wavfile.write(output_file, sample_rate, audio)
-    print(f"\n音声データをWAVファイル '{output_file}' として保存しました")
-    
-    print("\n=== 位相シフトサイン波の生成が完了しました ===\n")
+    return audio
+
+def combine_audio_signals(*audio_signals):
+    """
+    複数の音声データを合成する関数
+
+    :param audio_signals: 合成する音声データのリスト（numpy配列）
+    :return: 合成された音声データ（numpy配列）
+    """
+    print("\n=== 複数の音声データの合成を開始します ===\n")
+
+    # 入力された音声データの数を確認
+    num_signals = len(audio_signals)
+    print(f"合成する音声データの数: {num_signals}")
+
+    if num_signals == 0:
+        print("警告: 合成する音声データがありません。")
+        return np.array([])
+
+    # すべての音声データの長さを確認
+    lengths = [len(signal) for signal in audio_signals]
+    max_length = max(lengths)
+    print(f"最大の音声データ長: {max_length}")
+
+    # 最大の長さに合わせて各音声データをパディング
+    padded_signals = []
+    for signal in audio_signals:
+        if len(signal) < max_length:
+            padded_signal = np.pad(signal, (0, max_length - len(signal)), 'constant')
+        else:
+            padded_signal = signal
+        padded_signals.append(padded_signal)
+
+    # すべての音声データを合成
+    combined_signal = np.sum(padded_signals, axis=0)
+
+    # 音量を正規化 (-32768 to 32767)
+    max_amplitude = np.max(np.abs(combined_signal))
+    if max_amplitude > 0:
+        normalized_signal = (combined_signal / max_amplitude * 32767).astype(np.int16)
+    else:
+        normalized_signal = combined_signal.astype(np.int16)
+
+    print(f"合成された音声データの長さ: {len(normalized_signal)}")
+    print("音声データの合成が完了しました。")
+
+    return normalized_signal
 
 def main():
     """
     メイン関数：位相シフトサイン波生成のデモンストレーション
     """
     # パラメータの設定
-    frequency = 880  # 周波数 (Hz)
+    output_file = "wav/440hz_660hz_880hz_1100hz_test.wav"  # 出力ファイル名
     sample_rate = 16000  # サンプリングレート (Hz)
-    switch_interval = 32  # 位相反転間隔 (周期数)
-    binary_message = "01010011"  # 埋め込むメッセージ
-    output_file = f"wav/phase_shifting_sine_{frequency}Hz_{switch_interval}cycles.wav"  # 出力ファイル名
+    
+    parameters = [
+        {"frequency": 440,  "switch_interval": 16, "binary_message": "00110101"},
+        {"frequency": 660,  "switch_interval": 16, "binary_message": "011011010110"},
+        {"frequency": 880,  "switch_interval": 16, "binary_message": "0011010100010101"},
+        {"frequency": 1100, "switch_interval": 16, "binary_message": "010100111101011010010101"},
+    ]
 
-    print(f"パラメータ設定:\n周波数: {frequency}Hz\nサンプリングレート: {sample_rate}Hz\n位相反転間隔: {switch_interval}周期\nメッセージ: '{binary_message}'\n出力ファイル: {output_file}")
+    print(f"パラメータ設定:")
+    for i, param in enumerate(parameters, 1):
+        print(f"パラメータセット {i}:")
+        print(f"  周波数: {param['frequency']}Hz")
+        print(f"  位相反転間隔: {param['switch_interval']}周期")
+        print(f"  メッセージ: '{param['binary_message']}'")
+    print(f"サンプリングレート: {sample_rate}Hz")
+    print(f"出力ファイル: {output_file}")
 
     # 位相シフトサイン波の生成と保存
-    generate_phase_shifting_sine(frequency, sample_rate, switch_interval, binary_message, output_file)
+    audio_signals = []
+    for param in parameters:
+        frequency = param['frequency']
+        switch_interval = param['switch_interval']
+        binary_message = param['binary_message']
+        audio = generate_phase_shifting_sine(frequency, sample_rate, switch_interval, binary_message)
+        audio_signals.append(audio)
     
-    print(f"メッセージ '{binary_message}' を埋め込んだ位相シフトサイン波を {output_file} に生成しました。")
+    combined_audio = combine_audio_signals(*audio_signals)
+    
+    # WAVファイルとして出力
+    output_wav_file(combined_audio, sample_rate, output_file)
+
+    print(f"複数のメッセージを埋め込んだ位相シフトサイン波を {output_file} に生成しました。")
 
 if __name__ == "__main__":
     main()

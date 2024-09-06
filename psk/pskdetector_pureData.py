@@ -114,11 +114,13 @@ def main():
     """
     メイン関数：位相シフトサイン波復調のデモンストレーション
     """
-    input_file = "wav/440hz_and_880hz_record.wav"  # 入力ファイル名
+    input_file = "wav/440hz_660hz_880hz_1100hz_record.wav"  # 入力ファイル名
     guard_band_width = 220
     parameters = [
-        {"frequency": 880, "switch_interval": 32 },
-        {"frequency": 440, "switch_interval": 16 }
+        {"frequency": 440, "switch_interval": 16 },
+        {"frequency": 660, "switch_interval": 16 },
+        {"frequency": 880, "switch_interval": 16 },
+        {"frequency": 1100, "switch_interval": 16 },
     ]
 
     print(f"入力ファイル: {input_file}")
