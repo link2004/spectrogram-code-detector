@@ -1,87 +1,65 @@
 import numpy as np
 from scipy.io import wavfile
-from scipy.signal import hilbert
 
-def psk_demodulate_wav(file_path, frequency, cycles_per_symbol):
+def detect_phase_shifting_sine(input_file, frequency, switch_interval, sample_rate):
     """
-    WAVファイルからPSK変調された信号を復調する関数
+    位相シフトサイン波からメッセージを復調する関数
 
-    :param file_path: 入力WAVファイルのパス
-    :param frequency: 搬送波の周波数 (Hz)
-    :param cycles_per_symbol: 1シンボルあたりの搬送波の周期数
-    :return: 復調されたビット列
+    :param input_file: 入力WAVファイルの名前
+    :return: 復調されたメッセージ
     """
-    # WAVファイルを読み込む
-    sample_rate, audio_data = wavfile.read(file_path)
-    
-    # ステレオの場合は最初のチャンネルのみを使用
-    if audio_data.ndim > 1:
-        audio_data = audio_data[:, 0]
-    
-    # 音声データを-1から1の範囲に正規化
-    audio_data = audio_data.astype(float) / np.max(np.abs(audio_data))
+    print("=== 位相シフトサイン波の復調を開始します ===")
 
-    # 解析信号を生成（ヒルベルト変換を使用）
-    analytic_signal = hilbert(audio_data)
+    # 音声データを読み込む
+    sample_rate, audio = wavfile.read(input_file)
+    print(f"サンプリングレート: {sample_rate}Hz")
 
-    # 位相を抽出
-    instantaneous_phase = np.unwrap(np.angle(analytic_signal))
+    # 正規化
+    audio = audio / np.max(audio)
 
-    # 1シンボルあたりのサンプル数を計算
-    samples_per_symbol = int(sample_rate * cycles_per_symbol / frequency)
+    # 音声データを1bitデータ分ディレイ
+    delay_samples = int(sample_rate * switch_interval / frequency)
+    delayed_audio = np.roll(audio, delay_samples)
 
-    # シンボルごとの位相差を計算
-    phase_differences = np.diff(instantaneous_phase[::samples_per_symbol])
+    # ディレイ音声データと元の音声データを足す
+    mixed_audio = np.add(audio, delayed_audio)
 
-    # 位相差をビットに変換（閾値は0とする）
-    demodulated_bits = (phase_differences > 0).astype(int)
+    # 絶対値を取る
+    mixed_audio = np.abs(mixed_audio)
 
-    return demodulated_bits
+    # 1ビットデータ範囲ごとの和を計算
+    delay_samples = int(sample_rate * switch_interval / frequency)
+    bit_count = len(mixed_audio) // delay_samples
+    bit_sums = np.array([np.sum(mixed_audio[i*delay_samples:(i+1)*delay_samples]) for i in range(bit_count)])
 
-def bits_to_text(bits):
-    """
-    ビット列をテキストに変換する関数
+    # しきい値を設定して1ビットデータに変換
+    threshold = np.median(bit_sums)
+    bit_data = (bit_sums <= threshold).astype(int)[1:]
 
-    :param bits: ビット列
-    :return: 変換されたテキスト
-    """
-    # ビット列を8ビットずつのグループに分割
-    byte_groups = [bits[i:i+8] for i in range(0, len(bits), 8)]
-    
-    # 各グループを文字に変換
-    text = ''
-    for group in byte_groups:
-        if len(group) == 8:  # 8ビット未満のグループは無視
-            char_code = int(''.join(map(str, group)), 2)
-            text += chr(char_code)
-    
-    return text
+    print("ビットデータ:", bit_data)
+    # ディレイ音声データと元の音声データを足した音声データをファイルに出力
+    # wavfile.write("mixed_audio.wav", sample_rate, mixed_audio)
+    # wavfile.write("original_audio.wav", sample_rate, audio)
+    # wavfile.write("delayed_audio.wav", sample_rate, delayed_audio)
+
+    return ''.join(map(str, bit_data))
 
 def main():
     """
-    メイン関数：PSK復調のデモンストレーション
+    メイン関数：位相シフトサイン波復調のデモンストレーション
     """
-    # 入力ファイルのパス
-    file_path = "./phase_shifting_sine_440Hz_16cycles.wav"
+    input_file = "phase_shifting_sine_440Hz_1cycles.wav"  # 入力ファイル名
+    frequency = 440  # 周波数 (Hz)
+    switch_interval = 1  # 位相反転間隔 (周期数)
+    sample_rate = 44100  # サンプリングレート (Hz)
+
+    print(f"入力ファイル: {input_file}")
+    print(f"パラメータ設定:\n周波数: {frequency}Hz\n位相反転間隔: {switch_interval}周期\nサンプリングレート: {sample_rate}Hz")
+
+    # 位相シフトサイン波の復調
+    detected_message = detect_phase_shifting_sine(input_file, frequency, switch_interval, sample_rate)
     
-    # 搬送波の周波数 (Hz)
-    frequency = 440
-    
-    # 1シンボルあたりの搬送波の周期数
-    cycles_per_symbol = 16
-    
-    # PSK復調を実行
-    demodulated_bits = psk_demodulate_wav(file_path, frequency, cycles_per_symbol)
-    
-    # 結果を表示
-    print("復調されたビット列:")
-    print(demodulated_bits)
-    
-    # ビット列を文字列に変換
-    demodulated_text = bits_to_text(demodulated_bits)
-    
-    print("\n復調されたテキスト:")
-    print(demodulated_text)
+    print(f"復調されたメッセージ: '{detected_message}'")
 
 if __name__ == "__main__":
     main()
