@@ -75,10 +75,10 @@ def main():
     メイン関数：位相シフトサイン波生成のデモンストレーション
     """
     # パラメータの設定
-    frequency = 440  # 周波数 (Hz)
+    frequency = 880  # 周波数 (Hz)
     sample_rate = 16000  # サンプリングレート (Hz)
-    switch_interval = 1  # 位相反転間隔 (周期数)
-    binary_message = "001101001"  # 埋め込むメッセージ
+    switch_interval = 32  # 位相反転間隔 (周期数)
+    binary_message = "01010011"  # 埋め込むメッセージ
     output_file = f"phase_shifting_sine_{frequency}Hz_{switch_interval}cycles.wav"  # 出力ファイル名
 
     print(f"パラメータ設定:\n周波数: {frequency}Hz\nサンプリングレート: {sample_rate}Hz\n位相反転間隔: {switch_interval}周期\nメッセージ: '{binary_message}'\n出力ファイル: {output_file}")
