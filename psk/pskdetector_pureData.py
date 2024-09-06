@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.io import wavfile
 
-def detect_phase_shifting_sine(input_file, frequency, switch_interval, sample_rate):
+def detect_phase_shifting_sine(input_file, frequency, switch_interval):
     """
     位相シフトサイン波からメッセージを復調する関数
 
@@ -28,12 +28,11 @@ def detect_phase_shifting_sine(input_file, frequency, switch_interval, sample_ra
     mixed_audio = np.abs(mixed_audio)
 
     # 1ビットデータ範囲ごとの和を計算
-    delay_samples = int(sample_rate * switch_interval / frequency)
     bit_count = len(mixed_audio) // delay_samples
     bit_sums = np.array([np.sum(mixed_audio[i*delay_samples:(i+1)*delay_samples]) for i in range(bit_count)])
 
     # しきい値を設定して1ビットデータに変換
-    threshold = np.median(bit_sums)
+    threshold = np.mean([np.max(bit_sums), np.min(bit_sums)])
     bit_data = (bit_sums <= threshold).astype(int)[1:]
 
     print("ビットデータ:", bit_data)
@@ -51,13 +50,12 @@ def main():
     input_file = "phase_shifting_sine_440Hz_1cycles.wav"  # 入力ファイル名
     frequency = 440  # 周波数 (Hz)
     switch_interval = 1  # 位相反転間隔 (周期数)
-    sample_rate = 44100  # サンプリングレート (Hz)
 
     print(f"入力ファイル: {input_file}")
-    print(f"パラメータ設定:\n周波数: {frequency}Hz\n位相反転間隔: {switch_interval}周期\nサンプリングレート: {sample_rate}Hz")
+    print(f"パラメータ設定:\n周波数: {frequency}Hz\n位相反転間隔: {switch_interval}周期\n")
 
     # 位相シフトサイン波の復調
-    detected_message = detect_phase_shifting_sine(input_file, frequency, switch_interval, sample_rate)
+    detected_message = detect_phase_shifting_sine(input_file, frequency, switch_interval)
     
     print(f"復調されたメッセージ: '{detected_message}'")
 
