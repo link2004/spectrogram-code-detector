@@ -85,6 +85,20 @@ class PSKGeneratorGUI:
             bps_dropdown.grid(row=i, column=3, padx=5, pady=2)
             self.update_bps_options(i)
 
+    def update_bps_options(self, index):
+        frequency = self.frequencies[index].get()
+        options = []
+        prev_bps = None
+        for n in range(1, frequency + 1):
+            bps = round(frequency / n)
+            if bps != prev_bps:
+                options.append(str(bps))
+                prev_bps = bps
+        dropdown = self.freq_bps_frame.winfo_children()[index * 4 + 3]
+        dropdown['values'] = options
+        if self.bps_values[index].get() not in options:
+            self.bps_values[index].set(options[0])
+
     def create_duration_widget(self):
         ttk.Label(self.master, text="ファイルの長さ (秒):").grid(row=3, column=0, padx=5, pady=5)
         self.duration_var.set(1)  # 初期値を1に設定
