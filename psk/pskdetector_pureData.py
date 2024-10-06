@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.io import wavfile
 from scipy import signal
-
+import os
+import sys
 # wavファイルを読み込む関数
 def read_wav_file(file_path):
     sample_rate, audio = wavfile.read(file_path)
@@ -108,21 +109,14 @@ def bandpass_filter(audio, sample_rate, center_freq, guard_band_width):
 
     return filtered_audio
 
-
-
-def main():
+def main(input_file, guard_band_width, parameters):
     """
     メイン関数：位相シフトサイン波復調のデモンストレーション
-    """
-    input_file = "wav/440hz_660hz_880hz_1100hz_record.wav"  # 入力ファイル名
-    guard_band_width = 220
-    parameters = [
-        {"frequency": 440, "switch_interval": 16 },
-        {"frequency": 660, "switch_interval": 16 },
-        {"frequency": 880, "switch_interval": 16 },
-        {"frequency": 1100, "switch_interval": 16 },
-    ]
 
+    :param input_file: 入力ファイル名
+    :param guard_band_width: ガードバンド幅
+    :param parameters: 周波数と位相反転間隔のパラメータリスト
+    """
     print(f"入力ファイル: {input_file}")
     print("パラメータ設定:")
     for i, param in enumerate(parameters, 1):
@@ -134,9 +128,7 @@ def main():
     # 音声データを読み込む
     sample_rate, audio = read_wav_file(input_file)
 
-
     for i, param in enumerate(parameters, 1):
-        
         frequency = param['frequency']
         switch_interval = param['switch_interval']
         # フィルタリング
@@ -147,9 +139,32 @@ def main():
         # 位相シフトサイン波の復調
         detected_message = detect_phase_shifting_sine_multiply(filtered_audio, sample_rate, frequency, switch_interval)
 
-
-
         print(f"パラメータセット {i} の復調されたメッセージ: {detected_message}")
 
 if __name__ == "__main__":
-    main()
+    input_file = "wav/20241006/PSK_200Hz_2cycle_300Hz_3cycle_400Hz_4cycle_500Hz_5cycle.wav"
+    guard_band_width = 100
+    
+    # ファイルパスの有効性を確認
+    if not os.path.exists(input_file):
+        print(f"エラー: 指定されたファイル '{input_file}' が見つかりません。")
+        sys.exit(1)
+    
+    # ファイル名からパラメータを自動検出
+    filename = os.path.basename(input_file)
+    parameters = []
+    parts = filename.split('_')
+    for i in range(1, len(parts) - 1, 2):  # PSKと.wavを除外し、2つずつ処理
+        if 'Hz' in parts[i] and 'cycle' in parts[i+1]:
+            freq = int(parts[i].replace('Hz', ''))
+            cycle = int(parts[i+1].replace('cycle', '').split('.')[0])  # .wavを除去
+            parameters.append({"frequency": freq, "switch_interval": cycle})
+    
+    print("検出されたパラメータ:")
+    for i, param in enumerate(parameters, 1):
+        print(f"  パラメータセット {i}: 周波数 {param['frequency']}Hz, 位相反転間隔 {param['switch_interval']}周期")
+    
+    if not parameters:
+        print("警告: パラメータを検出できませんでした。ファイル名の形式を確認してください。")
+    
+    main(input_file, guard_band_width, parameters)
