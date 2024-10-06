@@ -117,23 +117,17 @@ def combine_audio_signals(*audio_signals):
 
     return normalized_signal
 
-def main():
+def main(output_file, sample_rate, waves):
     """
     メイン関数：位相シフトサイン波生成のデモンストレーション
-    """
-    # パラメータの設定
-    output_file = "wav/440hz_660hz_880hz_1100hz_test.wav"  # 出力ファイル名
-    sample_rate = 16000  # サンプリングレート (Hz)
-    
-    parameters = [
-        {"frequency": 440,  "switch_interval": 16, "binary_message": "00110101"},
-        {"frequency": 660,  "switch_interval": 16, "binary_message": "011011010110"},
-        {"frequency": 880,  "switch_interval": 16, "binary_message": "0011010100010101"},
-        {"frequency": 1100, "switch_interval": 16, "binary_message": "010100111101011010010101"},
-    ]
 
+    :param output_file: 出力するWAVファイルの名前
+    :param sample_rate: サンプリングレート (Hz)
+    :param waves: 波形パラメータのリスト。各要素は辞書形式で、
+                  {"frequency": int, "switch_interval": int, "binary_message": str}
+    """
     print(f"パラメータ設定:")
-    for i, param in enumerate(parameters, 1):
+    for i, param in enumerate(waves, 1):
         print(f"パラメータセット {i}:")
         print(f"  周波数: {param['frequency']}Hz")
         print(f"  位相反転間隔: {param['switch_interval']}周期")
@@ -143,7 +137,7 @@ def main():
 
     # 位相シフトサイン波の生成と保存
     audio_signals = []
-    for param in parameters:
+    for param in waves:
         frequency = param['frequency']
         switch_interval = param['switch_interval']
         binary_message = param['binary_message']
@@ -158,4 +152,14 @@ def main():
     print(f"複数のメッセージを埋め込んだ位相シフトサイン波を {output_file} に生成しました。")
 
 if __name__ == "__main__":
-    main()
+    # パラメータの設定
+    output_file = "wav/440hz_660hz_880hz_1100hz_test.wav"
+    sample_rate = 16000
+    waves = [
+        {"frequency": 440,  "switch_interval": 16, "binary_message": "00110101"},
+        {"frequency": 660,  "switch_interval": 16, "binary_message": "011011010110"},
+        {"frequency": 880,  "switch_interval": 16, "binary_message": "0011010100010101"},
+        {"frequency": 1100, "switch_interval": 16, "binary_message": "010100111101011010010101"},
+    ]
+
+    main(output_file, sample_rate, waves)
