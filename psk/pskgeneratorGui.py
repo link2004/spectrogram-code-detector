@@ -9,6 +9,9 @@ from pskgenerator import generate_phase_shifting_sine, combine_audio_signals, ou
 import datetime
 import os
 import math
+import pyaudio
+import wave
+from pskdetector_pureData import bandpass_filter, detect_phase_shifting_sine_multiply
 
 class PSKGeneratorGUI:
     def __init__(self, master):
@@ -25,8 +28,12 @@ class PSKGeneratorGUI:
         self.frequencies = []
         self.bps_values = []
         self.binary_messages = []  # 新しい属性を追加
+        self.recorded_file = None  # 録音されたファイルのパスを保存するための変数を追加
 
         pygame.mixer.init()
+
+        self.recording = False
+        self.p = pyaudio.PyAudio()
 
         self.create_widgets()
 
@@ -44,8 +51,12 @@ class PSKGeneratorGUI:
         self.create_binary_message_widgets()
 
         # 生成と再生ボタン
-        self.play_button = ttk.Button(self.master, text="生成して再生", command=self.generate_and_play)
+        self.play_button = ttk.Button(self.master, text="生成して再生", command=self.generate_play_and_record)
         self.play_button.grid(row=7, column=0, columnspan=2, padx=5, pady=5)
+
+        # 録音ファイル再生ボタンを追加
+        self.play_recorded_button = ttk.Button(self.master, text="録音ファイルを再生", command=self.play_recorded_audio, state="disabled")
+        self.play_recorded_button.grid(row=8, column=0, columnspan=2, padx=5, pady=5)
 
     def create_num_frequencies_widget(self):
         ttk.Label(self.master, text="周波数の数:").grid(row=0, column=0, padx=5, pady=5)
@@ -124,15 +135,99 @@ class PSKGeneratorGUI:
     def calculate_switch_interval(self, frequency, bps):
         return max(1, round(frequency / bps))  # 最小値を1に設定し、四捨五入して整数に
 
-    def generate_and_play(self):
+    def generate_play_and_record(self):
         if self.is_playing:
             pygame.mixer.music.stop()
             self.is_playing = False
+            self.recording = False
             self.play_button.config(text="生成して再生")
         else:
             self.generate_wav()
             if self.output_file:
-                self.play_audio()
+                self.play_and_record_audio()
+
+    def play_and_record_audio(self):
+        def play_thread():
+            pygame.mixer.music.load(self.output_file)
+            pygame.mixer.music.play()
+            self.recording = True
+            self.record_audio()
+            
+            # 再生が終了するまで待機
+            while pygame.mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
+            
+            # 再生が終了したら自動的に停止
+            self.is_playing = False
+            self.recording = False
+            self.master.after(0, lambda: self.play_button.config(text="生成して再生"))
+            self.master.after(0, lambda: self.play_recorded_button.config(state="normal"))  # 録音ファイル再生ボタンを有効化
+            self.analyze_recorded_audio()
+
+        threading.Thread(target=play_thread, daemon=True).start()
+        self.is_playing = True
+        self.play_button.config(text="停止")
+
+    def record_audio(self):
+        CHUNK = 1024
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = self.sample_rate
+
+        stream = self.p.open(format=FORMAT,
+                             channels=CHANNELS,
+                             rate=RATE,
+                             input=True,
+                             frames_per_buffer=CHUNK)
+
+        frames = []
+
+        print("録音開始...")
+        while self.recording:
+            data = stream.read(CHUNK)
+            frames.append(data)
+        print("録音終了")
+
+        stream.stop_stream()
+        stream.close()
+
+        current_date = datetime.datetime.now().strftime("%Y%m%d")
+        record_dir = os.path.join(".", "recordings", current_date)
+        os.makedirs(record_dir, exist_ok=True)
+        self.recorded_file = os.path.join(record_dir, f"recorded_{os.path.basename(self.output_file)}")
+
+        wf = wave.open(self.recorded_file, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(self.p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+
+    def analyze_recorded_audio(self):
+        print("録音された音声の分析を開始します...")
+        sample_rate, audio = wavfile.read(self.recorded_file)
+
+        for i, (freq_var, bps_var) in enumerate(zip(self.frequencies, self.bps_values)):
+            frequency = freq_var.get()
+            bps = int(bps_var.get())
+            switch_interval = self.calculate_switch_interval(frequency, bps)
+            
+            filtered_audio = bandpass_filter(audio, sample_rate, frequency, 200)
+            detected_message = detect_phase_shifting_sine_multiply(filtered_audio, sample_rate, frequency, switch_interval)
+            
+            original_message = self.binary_messages[i]
+            error_rate = self.calculate_error_rate(original_message, detected_message)
+            
+            print(f"周波数 {frequency}Hz:")
+            print(f"  元のメッセージ: {original_message}")
+            print(f"  検出されたメッセージ: {detected_message}")
+            print(f"  誤り率: {error_rate:.2f}%")
+
+    def calculate_error_rate(self, original, detected):
+        if len(original) != len(detected):
+            return 100.0  # 長さが異なる場合は100%エラーとする
+        errors = sum(a != b for a, b in zip(original, detected))
+        return (errors / len(original)) * 100
 
     def generate_wav(self):
         audio_signals = []
@@ -189,6 +284,19 @@ class PSKGeneratorGUI:
         threading.Thread(target=play_thread, daemon=True).start()
         self.is_playing = True
         self.play_button.config(text="停止")
+
+    def play_recorded_audio(self):
+        if not self.recorded_file:
+            messagebox.showerror("エラー", "録音されたファイルがありません。")
+            return
+
+        def play_thread():
+            pygame.mixer.music.load(self.recorded_file)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
+
+        threading.Thread(target=play_thread, daemon=True).start()
 
     def update_bps_options(self, index):
         frequency = self.frequencies[index].get()
