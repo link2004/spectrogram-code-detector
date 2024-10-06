@@ -24,6 +24,7 @@ class PSKGeneratorGUI:
         self.num_frequencies = tk.IntVar(value=1)
         self.frequencies = []
         self.bps_values = []
+        self.binary_messages = []  # 新しい属性を追加
 
         pygame.mixer.init()
 
@@ -136,11 +137,13 @@ class PSKGeneratorGUI:
     def generate_wav(self):
         audio_signals = []
         filename_parts = []
+        self.binary_messages = []  # バイナリメッセージをリセット
         for freq_var, bps_var in zip(self.frequencies, self.bps_values):
             frequency = freq_var.get()
             bps = int(bps_var.get())
             switch_interval = self.calculate_switch_interval(frequency, bps)
             binary_message = self.generate_random_binary()
+            self.binary_messages.append(binary_message)  # バイナリメッセージを保存
             audio = generate_phase_shifting_sine(frequency, self.sample_rate, switch_interval, binary_message)
             audio_signals.append(audio)
             filename_parts.append(f"{frequency}Hz_{switch_interval}cycle")
@@ -163,10 +166,16 @@ class PSKGeneratorGUI:
         try:
             output_wav_file(combined_audio, self.sample_rate, self.output_file)
             print(f"WAVファイルが生成されました: {self.output_file}")
+            self.print_binary_messages()  # バイナリメッセージを表示
         except PermissionError:
             messagebox.showerror("エラー", f"ファイル {self.output_file} への書き込み権限がありません。")
         except Exception as e:
             messagebox.showerror("エラー", f"WAVファイルの生成中にエラーが発生しました: {str(e)}")
+
+    def print_binary_messages(self):
+        print("埋め込まれたバイナリメッセージ:")
+        for i, message in enumerate(self.binary_messages, 1):
+            print(f"周波数 {i}: {message}")
 
     def play_audio(self):
         def play_thread():
