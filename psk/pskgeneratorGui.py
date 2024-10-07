@@ -11,7 +11,7 @@ import os
 import math
 import wave
 from pskdetector_pureData import bandpass_filter, detect_phase_shifting_sine_multiply
-import sounddevice as sd
+import soundcard as sc  # sounddeviceの代わりにsoundcardをインポート
 
 class PSKGeneratorGUI:
     def __init__(self, master):
@@ -29,6 +29,9 @@ class PSKGeneratorGUI:
         self.bps_values = []
         self.binary_messages = []  # 新しい属性を追加
         self.recorded_file = None  # 録音されたファイルのパスを保存するための変数を追加
+        self.mic = sc.default_microphone()  # デフォルトマイクを取得
+        self.recording_thread = None
+        self.recording_data = []
 
         pygame.mixer.init()
 
@@ -147,10 +150,12 @@ class PSKGeneratorGUI:
 
     def play_and_record_audio(self):
         def play_thread():
-            pygame.mixer.music.load(self.output_file)
-            pygame.mixer.music.play()
             self.recording = True
-            self.record_audio()
+            pygame.mixer.music.load(self.output_file)
+
+            self.start_recording()
+            
+            pygame.mixer.music.play()
             
             # 再生が終了するまで待機
             while pygame.mixer.music.get_busy():
@@ -159,6 +164,7 @@ class PSKGeneratorGUI:
             # 再生が終了したら自動的に停止
             self.is_playing = False
             self.recording = False
+            self.stop_recording()
             self.master.after(0, lambda: self.play_button.config(text="生成して再生"))
             self.master.after(0, lambda: self.play_recorded_button.config(state="normal"))  # 録音ファイル再生ボタンを有効化
             self.analyze_recorded_audio()
@@ -167,24 +173,40 @@ class PSKGeneratorGUI:
         self.is_playing = True
         self.play_button.config(text="停止")
 
-    def record_audio(self):
-        duration = self.duration_var.get()
-        
+    def start_recording(self):
+        self.recording_data = []
+        self.recording_thread = threading.Thread(target=self._record_audio, daemon=True)
+        self.recording_thread.start()
         print("録音開始...")
-        recording = sd.rec(int(duration * self.sample_rate), samplerate=self.sample_rate, channels=1, dtype='int16')
-        sd.wait()  # 録音が終了するまで待機
+
+    def stop_recording(self):
+        self.recording = False
+        if self.recording_thread:
+            self.recording_thread.join()
         print("録音終了")
+        self.save_recorded_audio()
+
+    def _record_audio(self):
+        while self.recording:
+            data = self.mic.record(samplerate=self.sample_rate, numframes=self.sample_rate // 10)  # 0.1秒ごとに録音
+            self.recording_data.append(data)
+
+    def save_recorded_audio(self):
+        if not self.recording_data:
+            print("録音データがありません。")
+            return
 
         current_date = datetime.datetime.now().strftime("%Y%m%d")
         record_dir = os.path.join(".", "recordings", current_date)
         os.makedirs(record_dir, exist_ok=True)
         self.recorded_file = os.path.join(record_dir, f"recorded_{os.path.basename(self.output_file)}")
 
+        combined_data = np.concatenate(self.recording_data)
         with wave.open(self.recorded_file, 'wb') as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(2)  # int16は2バイト
+            wf.setsampwidth(2)  # float32を16ビット整数に変換
             wf.setframerate(self.sample_rate)
-            wf.writeframes(recording.tobytes())
+            wf.writeframes((combined_data * 32767).astype(np.int16).tobytes())
 
     def analyze_recorded_audio(self):
         print("録音された音声の分析を開始します...")
