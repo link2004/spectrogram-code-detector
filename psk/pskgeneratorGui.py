@@ -9,9 +9,9 @@ from pskgenerator import generate_phase_shifting_sine, combine_audio_signals, ou
 import datetime
 import os
 import math
-import pyaudio
 import wave
 from pskdetector_pureData import bandpass_filter, detect_phase_shifting_sine_multiply
+import sounddevice as sd
 
 class PSKGeneratorGUI:
     def __init__(self, master):
@@ -33,7 +33,6 @@ class PSKGeneratorGUI:
         pygame.mixer.init()
 
         self.recording = False
-        self.p = pyaudio.PyAudio()
 
         self.create_widgets()
 
@@ -169,39 +168,23 @@ class PSKGeneratorGUI:
         self.play_button.config(text="停止")
 
     def record_audio(self):
-        CHUNK = 1024
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-        RATE = self.sample_rate
-
-        stream = self.p.open(format=FORMAT,
-                             channels=CHANNELS,
-                             rate=RATE,
-                             input=True,
-                             frames_per_buffer=CHUNK)
-
-        frames = []
-
+        duration = self.duration_var.get()
+        
         print("録音開始...")
-        while self.recording:
-            data = stream.read(CHUNK)
-            frames.append(data)
+        recording = sd.rec(int(duration * self.sample_rate), samplerate=self.sample_rate, channels=1, dtype='int16')
+        sd.wait()  # 録音が終了するまで待機
         print("録音終了")
-
-        stream.stop_stream()
-        stream.close()
 
         current_date = datetime.datetime.now().strftime("%Y%m%d")
         record_dir = os.path.join(".", "recordings", current_date)
         os.makedirs(record_dir, exist_ok=True)
         self.recorded_file = os.path.join(record_dir, f"recorded_{os.path.basename(self.output_file)}")
 
-        wf = wave.open(self.recorded_file, 'wb')
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(self.p.get_sample_size(FORMAT))
-        wf.setframerate(RATE)
-        wf.writeframes(b''.join(frames))
-        wf.close()
+        with wave.open(self.recorded_file, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # int16は2バイト
+            wf.setframerate(self.sample_rate)
+            wf.writeframes(recording.tobytes())
 
     def analyze_recorded_audio(self):
         print("録音された音声の分析を開始します...")
