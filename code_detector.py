@@ -7,6 +7,7 @@ class AudioStreamVisualizer:
     """リアルタイムで音声データのスペクトログラムをグラフィカルに表示するクラスです。"""
 
     def __init__(self, chunk=1600, format=pyaudio.paInt16, channels=1, rate=16000, history_length=100):
+        self.MAX_FREQ = 1000  # 最大周波数を2000Hzに設定
         self.CHUNK = chunk
         self.FORMAT = format
         self.CHANNELS = channels
@@ -37,7 +38,7 @@ class AudioStreamVisualizer:
         self.plot_spectrogram.addItem(self.spectrogram)
         self.spectrogram_data = np.zeros((self.HISTORY_LENGTH, self.CHUNK // 2 + 1))
         self.spectrogram.setImage(self.spectrogram_data)
-        self.spectrogram.setRect(pg.QtCore.QRectF(0, 0, self.HISTORY_LENGTH, self.RATE / 2))
+        self.spectrogram.setRect(pg.QtCore.QRectF(0, 0, self.HISTORY_LENGTH, self.MAX_FREQ))
         self.plot_spectrogram.setLabel('left', 'Frequency (Hz)')
         self.plot_spectrogram.setLabel('bottom', 'Time (Samples)')
 
@@ -55,17 +56,17 @@ class AudioStreamVisualizer:
             data = self.stream.read(self.CHUNK, exception_on_overflow=False)
             fft_data = self.compute_fft(data)
 
-            # 1000Hz以下の周波数成分をカット
-            fft_data = self.high_path_filter(fft_data, 1000)
+            # # 2000Hz以上の周波数成分をカット
+            # fft_data = self.low_pass_filter(fft_data, 2000)
 
             # 30未満の値を0に変換（ノイズ除去）
-            fft_data = np.where(fft_data < 30, 0, fft_data)
+            # fft_data = np.where(fft_data < 10, 0, fft_data)
 
             # 正規化 (0-1の範囲に収める)
             fft_data = self.normalize(fft_data)
             
             # 0.8未満の値を0に変換
-            fft_data = np.where(fft_data < 0.8, 0, fft_data)
+            fft_data = np.where(fft_data < 0.5, 0, fft_data)
 
             self.update_spectrogram(fft_data)
 
@@ -146,10 +147,10 @@ class AudioStreamVisualizer:
         return ''  # 範囲外の場合は空文字を返す
     
     
-    def high_path_filter(self, fft_data, frequency):
-        """ハイパスフィルタを適用"""
+    def low_pass_filter(self, fft_data, frequency):
+        """ローパスフィルタを適用"""
         index = int(frequency * self.CHUNK / self.RATE)
-        fft_data[:index] = 0
+        fft_data[index:] = 0
         return fft_data
     
     def update_spectrogram(self, fft_data):
