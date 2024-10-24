@@ -1,39 +1,16 @@
-import pygame.midi
 from pynput import keyboard
 import time
-import threading
 import math
 import sounddevice as sd
 import numpy as np
-
-# Pygameの初期化
-pygame.init()
-pygame.midi.init()
-
-# MIDIプレイヤーの設定
-player = pygame.midi.Output(pygame.midi.get_default_output_id())
-instruments = [0,13,79,109,115,118,120,124]
-instrument_index = 0
-player.set_instrument(instruments[instrument_index], 0)  # チャンネル0にグランドピアノ（音色0）を設定
-
-
-
-# Cメジャースケールの音階定義（C3からC8まで、5オクターブ）
-# 各数字はMIDIノート番号と周波数(Hz)を表しています
-NOTES = [48, 52, 55, 60, 64, 67, 72, 76, 79, 84, 88, 91, 96, 100, 103, 108]
+import pyaudio
+import threading  # threadingモジュールをインポート
 
 # 対応する周波数（Hz）の配列
 FREQUENCY = [
-    130.81, 164.81, 196.00,  # C3, E3, G3
-    261.63, 329.63, 392.00,  # C4, E4, G4
-    523.25, 659.25, 783.99,  # C5, E5, G5
-    1046.50, 1318.51, 1567.98,  # C6, E6, G6
-    2093.00, 2637.02, 3135.96,  # C7, E7, G7
-    4186.01  # C8
+    523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50,  # C5, D5, E5, F5, G5, A5, B5, C6
+    1174.66, 1318.51, 1396.91, 1567.98, 1760.00, 1975.53, 2093.00, 2349.32  # D6, E6, F6, G6, A6, B6, C7, D7
 ]
-
-# このスケールはCメジャーコードの構成音（C, E, G）を5オクターブにわたって並べています
-# 隣接する音の周波数比は約1.26（4分の5音）または約1.19（長3度）です
 
 # 音の長さ（秒）
 NOTE_DURATION = 0.1
@@ -46,12 +23,13 @@ def char_to_index(char):
     print(f"C: {C} -> A: {A}, B: {B}")
     return A, B
 
-
 def play_and_stop_chord(notes, velocity=100):
     for note in notes:
-        play_chord([FREQUENCY[note]], NOTE_DURATION, 1.0, 16000)
+        if note < len(FREQUENCY):  # 周波数リストの範囲内か確認
+            print(f"note: {FREQUENCY[note]}")
+            play_chord([FREQUENCY[note]], NOTE_DURATION, 1.0, 44100 )
 
-def play_chord(frequencies, duration, amplitude=1.0, sample_rate=16000):
+def play_chord(frequencies, duration, amplitude=1.0, sample_rate=44100):
     """
     複数の周波数を同時に再生して和音を作る関数
 
@@ -60,8 +38,17 @@ def play_chord(frequencies, duration, amplitude=1.0, sample_rate=16000):
     :param amplitude: 振幅（0.0から1.0の間）
     :param sample_rate: サンプリングレート（Hz）
     """
+    # PyAudioの初期化
+    p = pyaudio.PyAudio()
+
+    # ストリームを開く
+    stream = p.open(format=pyaudio.paFloat32,
+                    channels=1,
+                    rate=sample_rate,
+                    output=True)
+
     # 時間配列を生成
-    t = np.linspace(0, duration, int(sample_rate * duration), False)
+    t = np.arange(int(sample_rate * duration)) / sample_rate
 
     # 各周波数のサイン波を生成し、合成
     chord = np.zeros_like(t)
@@ -69,7 +56,8 @@ def play_chord(frequencies, duration, amplitude=1.0, sample_rate=16000):
         chord += amplitude * np.sin(2 * np.pi * freq * t)
 
     # 振幅を正規化
-    chord /= len(frequencies)
+    if len(frequencies) > 0:
+        chord /= len(frequencies)
 
     # クリッピングを防ぐためにノーマライズ
     max_amplitude = np.max(np.abs(chord))
@@ -77,8 +65,12 @@ def play_chord(frequencies, duration, amplitude=1.0, sample_rate=16000):
         chord = chord / max_amplitude
 
     # 音を再生
-    sd.play(chord, sample_rate)
-    sd.wait()
+    stream.write(chord.astype(np.float32).tobytes())
+
+    # ストリームを停止して閉じる
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
 def on_press(key):
     global instrument_index
@@ -90,8 +82,9 @@ def on_press(key):
             print(char)
             if char:
                 A, B = char_to_index(char)
-                notes = [A,B]
-                play_and_stop_chord(notes)
+                notes = [FREQUENCY[A],FREQUENCY[B]]
+                thread = threading.Thread(target=play_chord, args=(notes, 0.2))
+                thread.start()  # play_chordを別スレッドで実行
                 print(f"{FREQUENCY[A]}, {FREQUENCY[B]}")
     except AttributeError:
         pass
@@ -111,6 +104,3 @@ except KeyboardInterrupt:
 
 # クリーンアップ
 listener.stop()
-player.close()
-pygame.midi.quit()
-pygame.quit()
