@@ -83,7 +83,7 @@ def on_press(key):
             if char:
                 A, B = char_to_index(char)
                 notes = [FREQUENCY[A],FREQUENCY[B]]
-                thread = threading.Thread(target=play_chord, args=(notes, 0.2))
+                thread = threading.Thread(target=play_chord, args=(notes, NOTE_DURATION))
                 thread.start()  # play_chordを別スレッドで実行
                 print(f"{FREQUENCY[A]}, {FREQUENCY[B]}")
     except AttributeError:

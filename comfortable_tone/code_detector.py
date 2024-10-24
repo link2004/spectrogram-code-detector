@@ -7,7 +7,8 @@ from scipy.signal import find_peaks
 class AudioStreamVisualizer:
     """リアルタイムで音声データのスペクトログラムをグラフィカルに表示し、指定された周波数を検出します。"""
 
-    def __init__(self, chunk=2048, format=pyaudio.paInt16, channels=1, rate=16000, history_length=100):
+    def __init__(self, chunk=2048, format=pyaudio.paInt16, channels=1, rate=16000, history_length=100, isDebug=False):
+        self.isDebug = isDebug
         self.CHUNK = chunk
         self.FORMAT = format
         self.CHANNELS = channels
@@ -76,6 +77,11 @@ class AudioStreamVisualizer:
         xv = 1/2 * (f[x - 1] - f[x + 1]) / (f[x - 1] - 2 * f[x] + f[x + 1]) + x
         yv = f[x] - 1/4 * (f[x - 1] - f[x + 1]) * (xv - x)
         return (xv, yv)
+    
+    def index_to_char(self, A, B):
+        C = 15 * A - (A * (A - 1)) // 2 + B
+        return chr(C)
+
 
     def update(self):
         """ストリームからデータを読み込み、スペクトログラムとピークを更新"""
@@ -100,10 +106,21 @@ class AudioStreamVisualizer:
                         detected_frequencies.append(closest_freq)
                 detected_frequencies = list(set(detected_frequencies))  # 重複を削除
                 if 0 < len(detected_frequencies) <= 2:
-                    print(f"検出された周波数: {detected_frequencies} Hz")
+                    A = self.FREQUENCY.index(detected_frequencies[0])
+                    B = A if len(detected_frequencies) == 1 else self.FREQUENCY.index(detected_frequencies[1])
+                    A, B = min(A, B), max(A, B)
+                    char = self.index_to_char(A, B)
+                    print(char)
+
+                    if self.isDebug:
+                        print()
+                        print(f"{detected_frequencies} Hz")
+                        print(f"A: {A}, B: {B}")
+
+
             self.update_spectrogram(fft_data)
         except Exception as e:
-            print(f"エラーが発生しました: {str(e)}")
+            print(e)
 
     def update_spectrogram(self, fft_data):
         """スペクトログラムデータを更新"""
@@ -122,7 +139,13 @@ class AudioStreamVisualizer:
         self.p.terminate()
 
 if __name__ == '__main__':
-    visualizer = AudioStreamVisualizer()
+    isDebug = input("DEBUG:1, press enter: ")
+    if isDebug.strip() == "1":  # 入力の前後の空白を削除
+        print("DEBUG MODE")
+        visualizer = AudioStreamVisualizer(isDebug=True)
+    else:
+        print("NORMAL MODE")
+        visualizer = AudioStreamVisualizer()
     try:
         visualizer.start()
     finally:
