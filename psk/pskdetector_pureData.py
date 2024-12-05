@@ -152,7 +152,7 @@ def convert_wave_to_binary(file_path,  frequency, switch_interval):
     return detected_message
 
 if __name__ == "__main__":
-    input_file = "wav/output.wav"
+    input_file = "wav/input.wav"
     guard_band_width = 500
     
     # ファイルパスの有効性を確認
@@ -161,7 +161,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     parameters = [
-        {"frequency": 400, "switch_interval": 16},
+        {"frequency": 11025, "switch_interval": 10},
     ]
 
     print("検出されたパラメータ:")

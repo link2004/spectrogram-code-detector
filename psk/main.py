@@ -30,8 +30,8 @@ def main():
     sample_rate = 44100
     guard_band_width = 100
     # ランダムなバイナリメッセージを生成 (16ビット)
-    message = ''.join([str(random.randint(0, 1)) for _ in range(10000)])
-
+    # message = ''.join([str(random.randint(0, 1)) for _ in range(10000)])  
+    message = "010011"
     # 生成する信号のパラメータ
     # frequencyはサンプリングレートの1/4以下の約数にする
     waves = [
