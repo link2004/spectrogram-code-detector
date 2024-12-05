@@ -21,7 +21,7 @@ class PSKGeneratorGUI:
 
         self.waves = []
         self.output_file = None
-        self.sample_rate = 16000
+        self.sample_rate = 44100
         self.is_playing = False
         self.duration_var = tk.DoubleVar(value=5.0)
         self.num_frequencies = tk.IntVar(value=1)
