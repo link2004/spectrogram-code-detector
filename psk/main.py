@@ -31,11 +31,13 @@ def main():
     guard_band_width = 100
     # ランダムなバイナリメッセージを生成 (16ビット)
     # message = ''.join([str(random.randint(0, 1)) for _ in range(10000)])  
-    message = "010011"
+    # message = "010011"
     # 生成する信号のパラメータ
     # frequencyはサンプリングレートの1/4以下の約数にする
     waves = [
-        {"frequency": 11025, "switch_interval": 10, "binary_message": message},
+        {"frequency": 8820, "switch_interval": 220, "binary_message": "101011"},
+        {"frequency": 4410, "switch_interval": 110, "binary_message": "010011"},
+        {"frequency": 2205, "switch_interval": 55, "binary_message": "110100"},
     ]
 
     # 検出用のパラメータ（生成時のパラメータと一致させる）
@@ -56,6 +58,7 @@ def main():
     # detected_messages = detect_signal(output_file, guard_band_width, detection_parameters)
     detected_message = convert_wave_to_binary(output_file, detection_parameters[0]["frequency"], detection_parameters[0]["switch_interval"])
     # 誤り率
+    message = waves[0]["binary_message"]
     error_rate = calculate_error_rate(message, detected_message)
     print(f"original_message: {message}")
     print(f"detected_message: {detected_message}")

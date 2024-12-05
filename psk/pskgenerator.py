@@ -86,7 +86,7 @@ def generate_phase_shifting_sine(frequency: int, sample_rate: int,
     
     return normalize_audio(phase_shifting_sine)
 
-def combine_audio_signals(*audio_signals: List[np.ndarray]) -> np.ndarray:
+def combine_audio_signals(*audio_signals: List[np.ndarray], waves: List[Dict]) -> np.ndarray:
     """複数の音声信号を合成する"""
     print("\n=== 複数の音声データの合成を開始します ===\n")
     
@@ -103,8 +103,13 @@ def combine_audio_signals(*audio_signals: List[np.ndarray]) -> np.ndarray:
                      if len(signal) < max_length else signal 
                      for signal in audio_signals]
     
+    # 周波数の比率に応じて振幅を調整
+    max_freq = max(waves[i]['frequency'] for i in range(len(audio_signals)))
+    scaled_signals = [signal * (waves[i]['frequency'] / max_freq)
+                     for i, signal in enumerate(padded_signals)]
+    
     # 合成と正規化
-    combined_signal = np.sum(padded_signals, axis=0)
+    combined_signal = np.sum(scaled_signals, axis=0)
     normalized_signal = normalize_audio(combined_signal)
     
     print(f"合成された音声データの長さ: {len(normalized_signal)}")
@@ -134,7 +139,7 @@ def generate_psk_signal(output_file: str, sample_rate: int,
         ) for param in waves
     ]
     
-    combined_audio = combine_audio_signals(*audio_signals)
+    combined_audio = combine_audio_signals(*audio_signals, waves=waves)
     save_wav_file(combined_audio, sample_rate, output_file)
     print(f"複数のメッセージを埋め込んだ位相シフトサイン波を {output_file} に生成しました。")
 
