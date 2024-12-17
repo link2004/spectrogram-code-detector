@@ -16,21 +16,28 @@ def setup_audio_device():
 
 ## 波の設定
 WAVES = [
-    {"frequency": 8820, "switch_interval": 110},
-    {"frequency": 4410, "switch_interval": 55},
-    {"frequency": 2205, "switch_interval": 28},
+    {"frequency": 4410, "switch_interval": 55, "initial_gain": 100, "max_gain": 500, "bandwidth": 900},
+    {"frequency": 3308, "switch_interval": 41, "initial_gain": 100, "max_gain": 500, "bandwidth": 500},
+    {"frequency": 2756, "switch_interval": 34, "initial_gain": 100, "max_gain": 500, "bandwidth": 450},
+    {"frequency": 2205, "switch_interval": 28, "initial_gain": 100, "max_gain": 500, "bandwidth": 400},
 ]
 
+# WAVES = [
+#     {"frequency": 3780, "switch_interval": 42, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
+#     {"frequency": 3150, "switch_interval": 35, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
+#     {"frequency": 2520, "switch_interval": 28, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
+#     {"frequency": 1890, "switch_interval": 21, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
+# ]
+
 ## ゲイン
-INITIAL_GAIN = 100  # 初期ゲイン値
-MAX_GAIN = 1000    # 最大ゲイン値
-current_gains = [INITIAL_GAIN] * len(WAVES)  # 各波のゲイン値
-TARGET_MAX = 0.5  # 目標最大値
-GAIN_INCREASE_RATE = 0.01   
-GAIN_DECREASE_RATE = 0.9  
+TARGET_MAX = 0.8  # 目標最大値
+GAIN_INCREASE_RATE = 0.01  # 共通の増加率
+GAIN_DECREASE_RATE = 0.8   # 共通の減少率
+
+# 初期化を変更
+current_gains = [wave["initial_gain"] for wave in WAVES]
 
 ## パラメータ
-BANDWIDTH = 500  # バンド幅
 SAMPLE_RATE = 44100   
 BUFFER_SIZE = int(0.5 * SAMPLE_RATE)  
 
@@ -54,20 +61,25 @@ def audio_callback(indata, frames, time, status):
     data = indata[:, 0]
     
     for i, wave in enumerate(WAVES):
-        # バンドパスフィルタを適用
-        b, a = create_bandpass_filter(wave["frequency"], BANDWIDTH)
+        # バンドパスフィルタを適用（周波数ごとのバンド幅を使用）
+        b, a = create_bandpass_filter(wave["frequency"], wave["bandwidth"])
         filtered_data = signal.filtfilt(b, a, data)
 
-        # ゲインの自動調整
+        # ゲインの自動調整（共通のレート使用）
         current_max = np.max(np.abs(filtered_data))
         if current_max > 0:
-            target_gain = min(TARGET_MAX / current_max, MAX_GAIN)
+            target_gain = min(TARGET_MAX / current_max, wave["max_gain"])
             adjust_rate = GAIN_INCREASE_RATE if target_gain > current_gains[i] else GAIN_DECREASE_RATE
             current_gains[i] = current_gains[i] * (1 - adjust_rate) + target_gain * adjust_rate
 
         # ゲインを適用
         filtered_data = filtered_data * current_gains[i]
-        filtered_data = signal.medfilt(filtered_data, kernel_size=5)
+        
+        # メディアンフィルタのカーネルサイズを周波数に応じて調整
+        kernel_size = max(3, min(5, int(SAMPLE_RATE / wave["frequency"] * 2)))
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        filtered_data = signal.medfilt(filtered_data, kernel_size=kernel_size)
         
         shift = len(data)
         delay_samples = SAMPLE_RATE // wave["frequency"] * wave["switch_interval"]
@@ -84,15 +96,14 @@ def audio_callback(indata, frames, time, status):
 def update_plot(frame):
     """プロット更新用コールバック関数"""
     for i in range(len(WAVES)):
-        lines[i*4].set_ydata(plotdata_originals[i])
-        lines[i*4 + 1].set_ydata(plotdata_delays[i])
-        lines[i*4 + 2].set_ydata(plotdata_multiplies[i])
-        lines[i*4 + 3].set_text(f'Gain: {current_gains[i]:.2f}')
+        lines[i*3].set_ydata(plotdata_originals[i])
+        lines[i*3 + 1].set_ydata(plotdata_multiplies[i])
+        lines[i*3 + 2].set_text(f'Gain: {current_gains[i]:.2f}')
     return lines
 
 def setup_plot():
     """プロットの初期設定を行う"""
-    fig, axes = plt.subplots(len(WAVES), 3, figsize=(12, 4*len(WAVES)))
+    fig, axes = plt.subplots(len(WAVES), 2, figsize=(8, 4*len(WAVES)))
     lines = []
     
     for i, wave in enumerate(WAVES):
@@ -107,21 +118,15 @@ def setup_plot():
                             transform=axes[i,0].transAxes,
                             bbox=dict(facecolor='white', alpha=0.7))
         
-        # 2つ目の波形のプロット設定
-        line2, = axes[i,1].plot(plotdata_delays[i])
+        # delay波形の表示を削除し、multiply波形を2列目に移動
+        line2, = axes[i,1].plot(plotdata_multiplies[i])
         axes[i,1].set_ylim([-1.0, 1.0])
         axes[i,1].set_xlim([0, BUFFER_SIZE])
         axes[i,1].yaxis.grid(True)
-        axes[i,1].set_title(f'delay {wave["frequency"]}Hz')
+        axes[i,1].set_title(f'multiply {wave["frequency"]}Hz')
         
-        # 3つ目の波形の設定
-        line3, = axes[i,2].plot(plotdata_multiplies[i])
-        axes[i,2].set_ylim([-1.0, 1.0])
-        axes[i,2].set_xlim([0, BUFFER_SIZE])
-        axes[i,2].yaxis.grid(True)
-        axes[i,2].set_title(f'multiply {wave["frequency"]}Hz')
-        
-        lines.extend([line1, line2, line3, gain_text])
+        # linesリストからdelay波形関連を削除
+        lines.extend([line1, line2, gain_text])
     
     fig.tight_layout()
     return fig, lines
