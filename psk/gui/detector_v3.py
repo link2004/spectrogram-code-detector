@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 from scipy import signal
+from typing import List
 
 # オーディオデバイスの設定
 def setup_audio_device():
@@ -16,10 +17,10 @@ def setup_audio_device():
 
 ## 波の設定
 WAVES = [
-    {"frequency": 4410, "switch_interval": 55, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
-    {"frequency": 3308, "switch_interval": 41, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
-    {"frequency": 2756, "switch_interval": 34, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
-    {"frequency": 2205, "switch_interval": 28, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
+    {"frequency": 4410, "switch_interval": 110, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
+    {"frequency": 3308, "switch_interval": 82, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
+    {"frequency": 2756, "switch_interval": 68, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
+    {"frequency": 2205, "switch_interval": 56, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
 ]
 
 
@@ -49,9 +50,40 @@ def create_bandpass_filter(center_freq, bandwidth):
     b, a = signal.butter(6, [low, high], btype='band')
     return b, a
 
+def detect_bits(data: np.ndarray, delay_samples: int) -> List[int]:
+    """
+    入力データから4ビットのデータを検出する
+    
+    Args:
+        data: すでに掛け合わされた入力データ配列
+        delay_samples: 遅延サンプル数
+    
+    Returns:
+        List[int]: 検出された4ビットのデータ
+    """
+    # データ長が足りない場合は空リストを返す
+    if len(data) < delay_samples * 5:  # 4ビット+1ビット分のバッファ
+        return []
+    
+    # 5ビット分のデータ範囲ごとの和を計算
+    bit_sums = np.array([
+        np.sum(data[i*delay_samples:(i+1)*delay_samples]) 
+        for i in range(5)  # 5ビット分計算
+    ])
+    
+    # しきい値を設定して1ビットデータに変換
+    threshold = np.mean([np.max(bit_sums), np.min(bit_sums)])
+    bit_data = (bit_sums <= threshold).astype(int)
+    
+    return bit_data[:4].tolist()  # 最初の4ビットのみ返す
+
+DETECT_THRESHOLD = 0.1
+TARGET_DATA_BUFFER_SIZE = [SAMPLE_RATE // WAVES[i]["frequency"] * WAVES[i]["switch_interval"] * 5 for i in range(len(WAVES))]  # 4ビット+1ビット分に変更
+target_data_buffers = [np.zeros((TARGET_DATA_BUFFER_SIZE[i])) for i in range(len(WAVES))]
+
 def audio_callback(indata, frames, time, status):
     """オーディオ入力コールバック関数"""
-    global plotdata_originals, plotdata_delays, plotdata_multiplies, current_gains
+    global plotdata_originals, plotdata_delays, plotdata_multiplies, current_gains, target_data_buffers
     data = indata[:, 0]
     
     for i, wave in enumerate(WAVES):
@@ -69,14 +101,13 @@ def audio_callback(indata, frames, time, status):
         # ゲインを適用
         filtered_data = filtered_data * current_gains[i]
         
-        # メディアンフィルタのカーネルサイズを周波数に応じて調整
-        kernel_size = max(3, min(5, int(SAMPLE_RATE / wave["frequency"] * 2)))
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-        filtered_data = signal.medfilt(filtered_data, kernel_size=kernel_size)
+        # # メディアンフィルタのカーネルサイズを周波数に応じて調整
+        # kernel_size = max(3, min(5, int(SAMPLE_RATE / wave["frequency"] * 2)))
+        # if kernel_size % 2 == 0:
+        #     kernel_size += 1
+        # filtered_data = signal.medfilt(filtered_data, kernel_size=kernel_size)
         
         shift = len(data)
-        delay_samples = SAMPLE_RATE // wave["frequency"] * wave["switch_interval"]
         
         plotdata_originals[i] = np.roll(plotdata_originals[i], -shift)
         plotdata_originals[i][-shift:] = filtered_data
@@ -87,17 +118,42 @@ def audio_callback(indata, frames, time, status):
         plotdata_multiplies[i] = np.roll(plotdata_multiplies[i], -shift)
         plotdata_multiplies[i][-shift:] = filtered_data * plotdata_delays[i][BUFFER_SIZE-shift:BUFFER_SIZE] * 4
 
+    # 全ての波の閾値をチェック
+    thresholds = []
+    target_data_list = []
+    for i, wave in enumerate(WAVES):
+        delay_samples = SAMPLE_RATE // wave["frequency"] * wave["switch_interval"]
+        target_data = plotdata_multiplies[i][-delay_samples*5:]
+        target_data_list.append(target_data)
+        threshold = np.mean(np.abs(target_data))
+        thresholds.append(threshold > DETECT_THRESHOLD)
+    # 全ての波が閾値を超えた場合にのみ出力
+    detected_bits_list = []
+    if all(thresholds):
+        for i, wave in enumerate(WAVES):
+            print(f"{wave['frequency']}Hz: {threshold}")
+            detected_bits = detect_bits(plotdata_multiplies[i], delay_samples)
+            detected_bits_list.append(detected_bits)
+    
+    # WAVESの長さと比較する（現在は4波）
+    if len(detected_bits_list) >= len(WAVES):  # 5ではなくlen(WAVES)に修正
+        print(detected_bits_list)
+        # target_dataをバッファに保存
+        target_data_buffers = target_data_list
+
+
 def update_plot(frame):
     """プロット更新用コールバック関数"""
     for i in range(len(WAVES)):
-        lines[i*3].set_ydata(plotdata_originals[i])
-        lines[i*3 + 1].set_ydata(plotdata_multiplies[i])
-        lines[i*3 + 2].set_text(f'Gain: {current_gains[i]:.2f}')
+        lines[i*4].set_ydata(plotdata_originals[i])
+        lines[i*4 + 1].set_ydata(plotdata_multiplies[i])
+        lines[i*4 + 2].set_text(f'Gain: {current_gains[i]:.2f}')
+        lines[i*4 + 3].set_ydata(target_data_buffers[i])  # target_dataの表示を更新
     return lines
 
 def setup_plot():
     """プロットの初期設定を行う"""
-    fig, axes = plt.subplots(len(WAVES), 2, figsize=(8, 4*len(WAVES)))
+    fig, axes = plt.subplots(len(WAVES), 3, figsize=(12, 4*len(WAVES)))  # 3列に変更
     lines = []
     
     for i, wave in enumerate(WAVES):
@@ -112,15 +168,21 @@ def setup_plot():
                             transform=axes[i,0].transAxes,
                             bbox=dict(facecolor='white', alpha=0.7))
         
-        # delay波形の表示を削除し、multiply波形を2列目に移動
+        # multiply波形
         line2, = axes[i,1].plot(plotdata_multiplies[i])
         axes[i,1].set_ylim([-1.0, 1.0])
         axes[i,1].set_xlim([0, BUFFER_SIZE])
         axes[i,1].yaxis.grid(True)
         axes[i,1].set_title(f'multiply {wave["frequency"]}Hz')
         
-        # linesリストからdelay波形関連を削除
-        lines.extend([line1, line2, gain_text])
+        # target_data波形
+        line3, = axes[i,2].plot(target_data_buffers[i])
+        axes[i,2].set_ylim([-1.0, 1.0])
+        axes[i,2].set_xlim([0, TARGET_DATA_BUFFER_SIZE[i]])
+        axes[i,2].yaxis.grid(True)
+        axes[i,2].set_title(f'target data {wave["frequency"]}Hz')
+        
+        lines.extend([line1, line2, gain_text, line3])
     
     fig.tight_layout()
     return fig, lines
