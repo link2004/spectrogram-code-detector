@@ -13,17 +13,31 @@ def setup_audio_device():
     sd.default.device = [1, 6]  # 入力デバイス:1, 出力デバイス:6
 
 # グローバル変数の設定
-GAIN = 1000
-FREQUENCY = 8820  # 周波数
-SWITCH_INTERVAL = 110 # スイッチ間隔
-BANDWIDTH = 500  # バンド幅
-SAMPLE_RATE = 44100   # サンプリングレート
-BUFFER_SIZE = int(0.5 * SAMPLE_RATE )  # バッファサイズ
-DELAY_SAMPLES = SAMPLE_RATE // FREQUENCY * SWITCH_INTERVAL  # ディレイのサンプル数
 
-plotdata_original = np.zeros((BUFFER_SIZE))
-plotdata_delay = np.zeros((DELAY_SAMPLES + BUFFER_SIZE))
-plotdata_multiply = np.zeros((BUFFER_SIZE))  # 掛け算用の新しい配列を追加
+## 波の設定
+WAVES = [
+    {"frequency": 8820, "switch_interval": 110},
+    {"frequency": 4410, "switch_interval": 55},
+    {"frequency": 2205, "switch_interval": 28},
+]
+
+## ゲイン
+INITIAL_GAIN = 100  # 初期ゲイン値
+MAX_GAIN = 1000    # 最大ゲイン値
+current_gains = [INITIAL_GAIN] * len(WAVES)  # 各波のゲイン値
+TARGET_MAX = 0.5  # 目標最大値
+GAIN_INCREASE_RATE = 0.01   
+GAIN_DECREASE_RATE = 0.9  
+
+## パラメータ
+BANDWIDTH = 500  # バンド幅
+SAMPLE_RATE = 44100   
+BUFFER_SIZE = int(0.5 * SAMPLE_RATE)  
+
+# 各波形用のバッファを作成
+plotdata_originals = [np.zeros((BUFFER_SIZE)) for _ in WAVES]
+plotdata_delays = [np.zeros((SAMPLE_RATE // wave["frequency"] * wave["switch_interval"] + BUFFER_SIZE)) for wave in WAVES]
+plotdata_multiplies = [np.zeros((BUFFER_SIZE)) for _ in WAVES]
 
 # バンドパスフィルタの設定を追加
 def create_bandpass_filter(center_freq, bandwidth):
@@ -35,70 +49,80 @@ def create_bandpass_filter(center_freq, bandwidth):
     return b, a
 
 def audio_callback(indata, frames, time, status):
-    """
-    オーディオ入力コールバック関数
-    indata: 入力オーディオデータ (shape=(サンプル数, チャンネル数))
-    """
-    global plotdata_original, plotdata_delay, plotdata_multiply  # グローバル変数に追加
+    """オーディオ入力コールバック関数"""
+    global plotdata_originals, plotdata_delays, plotdata_multiplies, current_gains
     data = indata[:, 0]
     
-    # バンドパスフィルタを適用
-    b, a = create_bandpass_filter(FREQUENCY, BANDWIDTH)
-    filtered_data = signal.filtfilt(b, a, data) * GAIN
+    for i, wave in enumerate(WAVES):
+        # バンドパスフィルタを適用
+        b, a = create_bandpass_filter(wave["frequency"], BANDWIDTH)
+        filtered_data = signal.filtfilt(b, a, data)
 
-    # 振幅の変化を滑らかに
-    filtered_data = signal.medfilt(filtered_data, kernel_size=5)
-    
-    shift = len(data)
-    
-    plotdata_original = np.roll(plotdata_original, -shift)
-    plotdata_original[-shift:] = filtered_data  # フィルタ適用後のデータを使用
-    
-    plotdata_delay = np.roll(plotdata_delay, -shift)
-    plotdata_delay[-shift:] = filtered_data     # フィルタ適用後のデータを使用
-    
-    plotdata_multiply = np.roll(plotdata_multiply, -shift)
-    plotdata_multiply[-shift:] = filtered_data * plotdata_delay[BUFFER_SIZE-shift:BUFFER_SIZE] * 1000
+        # ゲインの自動調整
+        current_max = np.max(np.abs(filtered_data))
+        if current_max > 0:
+            target_gain = min(TARGET_MAX / current_max, MAX_GAIN)
+            adjust_rate = GAIN_INCREASE_RATE if target_gain > current_gains[i] else GAIN_DECREASE_RATE
+            current_gains[i] = current_gains[i] * (1 - adjust_rate) + target_gain * adjust_rate
+
+        # ゲインを適用
+        filtered_data = filtered_data * current_gains[i]
+        filtered_data = signal.medfilt(filtered_data, kernel_size=5)
+        
+        shift = len(data)
+        delay_samples = SAMPLE_RATE // wave["frequency"] * wave["switch_interval"]
+        
+        plotdata_originals[i] = np.roll(plotdata_originals[i], -shift)
+        plotdata_originals[i][-shift:] = filtered_data
+        
+        plotdata_delays[i] = np.roll(plotdata_delays[i], -shift)
+        plotdata_delays[i][-shift:] = filtered_data
+        
+        plotdata_multiplies[i] = np.roll(plotdata_multiplies[i], -shift)
+        plotdata_multiplies[i][-shift:] = filtered_data * plotdata_delays[i][BUFFER_SIZE-shift:BUFFER_SIZE] * 4
 
 def update_plot(frame):
-    """
-    プロット更新用コールバック関数
-    matplotlibのアニメーション機能で呼び出される
-    """
-    global plotdata_original
-    lines[0].set_ydata(plotdata_original)
-    lines[1].set_ydata(plotdata_delay)
-    lines[2].set_ydata(plotdata_multiply)  # 掛け算波形の更新を追加
+    """プロット更新用コールバック関数"""
+    for i in range(len(WAVES)):
+        lines[i*4].set_ydata(plotdata_originals[i])
+        lines[i*4 + 1].set_ydata(plotdata_delays[i])
+        lines[i*4 + 2].set_ydata(plotdata_multiplies[i])
+        lines[i*4 + 3].set_text(f'Gain: {current_gains[i]:.2f}')
     return lines
 
-# プロット初期設定
 def setup_plot():
     """プロットの初期設定を行う"""
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 9))  # 3つのサブプロットに変更
+    fig, axes = plt.subplots(len(WAVES), 3, figsize=(12, 4*len(WAVES)))
     lines = []
     
-    # 1つ目の波形のプロット設定
-    line1, = ax1.plot(plotdata_original)
-    ax1.set_ylim([-1.0, 1.0])
-    ax1.set_xlim([0, BUFFER_SIZE])
-    ax1.yaxis.grid(True)
-    ax1.set_title('original')
+    for i, wave in enumerate(WAVES):
+        # 1つ目の波形のプロット設定
+        line1, = axes[i,0].plot(plotdata_originals[i])
+        axes[i,0].set_ylim([-1.0, 1.0])
+        axes[i,0].set_xlim([0, BUFFER_SIZE])
+        axes[i,0].yaxis.grid(True)
+        axes[i,0].set_title(f'original {wave["frequency"]}Hz')
+        
+        gain_text = axes[i,0].text(0.02, 0.95, f'Gain: {current_gains[i]:.2f}', 
+                            transform=axes[i,0].transAxes,
+                            bbox=dict(facecolor='white', alpha=0.7))
+        
+        # 2つ目の波形のプロット設定
+        line2, = axes[i,1].plot(plotdata_delays[i])
+        axes[i,1].set_ylim([-1.0, 1.0])
+        axes[i,1].set_xlim([0, BUFFER_SIZE])
+        axes[i,1].yaxis.grid(True)
+        axes[i,1].set_title(f'delay {wave["frequency"]}Hz')
+        
+        # 3つ目の波形の設定
+        line3, = axes[i,2].plot(plotdata_multiplies[i])
+        axes[i,2].set_ylim([-1.0, 1.0])
+        axes[i,2].set_xlim([0, BUFFER_SIZE])
+        axes[i,2].yaxis.grid(True)
+        axes[i,2].set_title(f'multiply {wave["frequency"]}Hz')
+        
+        lines.extend([line1, line2, line3, gain_text])
     
-    # 2つ目の波形のプロット設定
-    line2, = ax2.plot(plotdata_delay)
-    ax2.set_ylim([-1.0, 1.0])
-    ax2.set_xlim([0, BUFFER_SIZE])
-    ax2.yaxis.grid(True)
-    ax2.set_title('delay')
-    
-    # 3つ目の波形（掛け算）の設定を追加
-    line3, = ax3.plot(plotdata_multiply)
-    ax3.set_ylim([-1.0, 1.0])
-    ax3.set_xlim([0, BUFFER_SIZE])
-    ax3.yaxis.grid(True)
-    ax3.set_title('multiply')
-    
-    lines = [line1, line2, line3]
     fig.tight_layout()
     return fig, lines
 
