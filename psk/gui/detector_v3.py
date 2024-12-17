@@ -50,40 +50,75 @@ def create_bandpass_filter(center_freq, bandwidth):
     b, a = signal.butter(6, [low, high], btype='band')
     return b, a
 
-def detect_bits(data: np.ndarray, delay_samples: int) -> List[int]:
+def detect_bits(bit_sums: np.ndarray) -> List[int]:
     """
-    入力データから4ビットのデータを検出する
+    和からビットを検出する
+    """
+
+    # # 絶対値が一定の値を超えているか判定
+    # threshold = 200
+    # if np.mean(np.abs(bit_sums[:4])) > threshold:
+    #     return [-1, -1, -1, -1]
+
+    threshold = 0
+    bit_data = (bit_sums <= threshold).astype(int)
+    return bit_data[:4].tolist()  # 最初の4ビットのみ返す
+
+def detect_sums(target_data: np.ndarray, delay_samples: int) -> np.ndarray:
+    """
+    入力データから5ビット分の和を計算する
     
     Args:
-        data: すでに掛け合わされた入力データ配列
+        target_data: すでに掛け合わされた入���データ配列
         delay_samples: 遅延サンプル数
+        i: 波形のインデックス
     
     Returns:
-        List[int]: 検出された4ビットのデータ
+        np.ndarray: 5ビット分の和の配列
     """
-    # データ長が足りない場合は空リストを返す
-    if len(data) < delay_samples * 5:  # 4ビット+1ビット分のバッファ
-        return []
+    # データ長が足りない場合は空配列を返す
+    if len(target_data) < delay_samples * 5:  # 4ビット+1ビット分のバッファ
+        return np.array([])
     
     # 5ビット分のデータ範囲ごとの和を計算
     bit_sums = np.array([
-        np.sum(data[i*delay_samples:(i+1)*delay_samples]) 
-        for i in range(5)  # 5ビット分計算
+        np.sum(target_data[j*delay_samples:(j+1)*delay_samples]) 
+        for j in range(5)  # 5ビット分計算
     ])
-    
-    # しきい値を設定して1ビットデータに変換
-    threshold = np.mean([np.max(bit_sums), np.min(bit_sums)])
-    bit_data = (bit_sums <= threshold).astype(int)
-    
-    return bit_data[:4].tolist()  # 最初の4ビットのみ返す
+
+
+    return bit_sums
 
 DETECT_THRESHOLD = 0.1
 TARGET_DATA_BUFFER_SIZE = [SAMPLE_RATE // WAVES[i]["frequency"] * WAVES[i]["switch_interval"] * 5 for i in range(len(WAVES))]  # 4ビット+1ビット分に変更
 target_data_buffers = [np.zeros((TARGET_DATA_BUFFER_SIZE[i])) for i in range(len(WAVES))]
 
+bit_sums_buffers = [np.zeros(5) for _ in WAVES]  # 各波形のbit_sums用バッファ
+
+def check_parity(bits: List[int]) -> bool:
+    """
+    8ビットのパリティチェックを行う
+    最後のビットはパリティビット
+    
+    Args:
+        bits: 8ビットのリスト
+    
+    Returns:
+        bool: パリティチェックが正しければTrue
+    """
+    if len(bits) != 8:
+        return False
+    
+    # 最後のビットを除いた7ビットの1の数を数える
+    data_bits_sum = sum(bits[:7])
+    # 偶数パリティの場合
+    expected_parity = data_bits_sum % 2
+    
+    return bits[7] == expected_parity
+
 def audio_callback(indata, frames, time, status):
     """オーディオ入力コールバック関数"""
-    global plotdata_originals, plotdata_delays, plotdata_multiplies, current_gains, target_data_buffers
+    global plotdata_originals, plotdata_delays, plotdata_multiplies, current_gains, target_data_buffers, bit_sums_buffers
     data = indata[:, 0]
     
     for i, wave in enumerate(WAVES):
@@ -127,33 +162,64 @@ def audio_callback(indata, frames, time, status):
         target_data_list.append(target_data)
         threshold = np.mean(np.abs(target_data))
         thresholds.append(threshold > DETECT_THRESHOLD)
-    # 全ての波が閾値を超えた場合にのみ出力
+
+    # 各波形のデータを処理
     detected_bits_list = []
+    detected_sums_list = []
     if all(thresholds):
         for i, wave in enumerate(WAVES):
-            print(f"{wave['frequency']}Hz: {threshold}")
-            detected_bits = detect_bits(plotdata_multiplies[i], delay_samples)
+            delay_samples = SAMPLE_RATE // wave["frequency"] * wave["switch_interval"]
+            detected_sums = detect_sums(target_data_list[i], delay_samples)
+            detected_bits = detect_bits(detected_sums)
+            detected_sums_list.append(detected_sums)
             detected_bits_list.append(detected_bits)
-    
-    # WAVESの長さと比較する（現在は4波）
-    if len(detected_bits_list) >= len(WAVES):  # 5ではなくlen(WAVES)に修正
-        print(detected_bits_list)
-        # target_dataをバッファに保存
-        target_data_buffers = target_data_list
+
+        # 4ビットずつの配列を8ビットに結合
+        if len(detected_bits_list) >= 2:
+            # 最初の2つの波形の4ビットを結合して8ビットにする
+            first_8bits = detected_bits_list[0] + detected_bits_list[1]
+            # 次の2つの波形の4ビットを結合して8ビットにする
+            second_8bits = detected_bits_list[2] + detected_bits_list[3]
+            
+            # パリティチェックを実行
+            first_parity_ok = check_parity(first_8bits)
+            second_parity_ok = check_parity(second_8bits)
+            
+            # パリティチェック結果を表示
+            print(f"第1グループのパリティチェック結果: {'正常' if first_parity_ok else '異常'}")
+            print(f"第2グループのパリティチェック結果: {'正常' if second_parity_ok else '異常'}")
+            print(f"データ1: {first_8bits}, データ2: {second_8bits}")
+
+            if first_parity_ok or second_parity_ok:
+                bit_sums_buffers = detected_sums_list
+                target_data_buffers = target_data_list
+        
 
 
 def update_plot(frame):
     """プロット更新用コールバック関数"""
+    artists = []  # 更新するArtistオブジェクトを格納するリスト
+    
     for i in range(len(WAVES)):
-        lines[i*4].set_ydata(plotdata_originals[i])
-        lines[i*4 + 1].set_ydata(plotdata_multiplies[i])
-        lines[i*4 + 2].set_text(f'Gain: {current_gains[i]:.2f}')
-        lines[i*4 + 3].set_ydata(target_data_buffers[i])  # target_dataの表示を更新
-    return lines
+        # 波形とテキストの更新
+        lines[i*5].set_ydata(plotdata_originals[i])
+        lines[i*5 + 1].set_ydata(plotdata_multiplies[i])
+        lines[i*5 + 2].set_text(f'Gain: {current_gains[i]:.2f}')
+        lines[i*5 + 3].set_ydata(target_data_buffers[i])
+        
+        # Artist オブジェクトをリストに追加
+        artists.extend([lines[i*5], lines[i*5 + 1], lines[i*5 + 2], lines[i*5 + 3]])
+        
+        # 棒グラフの更新
+        for rect, val in zip(lines[i*5 + 4], bit_sums_buffers[i]):
+            rect.set_height(val)
+            artists.append(rect)  # 各棒をArtistリストに追加
+    
+    return artists  # 更新された全てのArtistオブジェクトのリストを返す
 
 def setup_plot():
     """プロットの初期設定を行う"""
-    fig, axes = plt.subplots(len(WAVES), 3, figsize=(12, 4*len(WAVES)))  # 3列に変更
+    fig, axes = plt.subplots(len(WAVES), 4, figsize=(16, 4*len(WAVES)))  # 4列に変更
     lines = []
     
     for i, wave in enumerate(WAVES):
@@ -182,7 +248,14 @@ def setup_plot():
         axes[i,2].yaxis.grid(True)
         axes[i,2].set_title(f'target data {wave["frequency"]}Hz')
         
-        lines.extend([line1, line2, gain_text, line3])
+        # bit_sums用の棒グラフの設定を変更
+        line4 = axes[i,3].bar(range(5), bit_sums_buffers[i])
+        axes[i,3].set_ylim([-500.0, 500.0])  # 範囲を-500から500に変更
+        axes[i,3].set_xlim([-0.5, 4.5])
+        axes[i,3].yaxis.grid(True)
+        axes[i,3].set_title(f'bit sums {wave["frequency"]}Hz')
+        
+        lines.extend([line1, line2, gain_text, line3, line4])
     
     fig.tight_layout()
     return fig, lines
@@ -197,7 +270,13 @@ stream = sd.InputStream(
     dtype='float32',
     callback=audio_callback
 )
-animation = FuncAnimation(fig, update_plot, interval=30, blit=True)
+animation = FuncAnimation(
+    fig, 
+    update_plot, 
+    interval=30, 
+    blit=True,
+    cache_frame_data=False  # キャッシュを無効化
+)
 
 # ストリーム開始とプロット表示
 with stream:
