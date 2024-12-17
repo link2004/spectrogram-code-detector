@@ -4,6 +4,7 @@ import numpy as np
 from pskgenerator import generate_psk_signal, generate_psk_signal_in_memory
 import sounddevice as sd
 import wave
+import pyaudio
 
 # グローバル変数として設定
 SAMPLE_RATE = 44100
@@ -11,6 +12,33 @@ SAMPLE_RATE = 44100
 sd.default.samplerate = SAMPLE_RATE
 sd.default.channels = 1
 sd.default.dtype = np.int16
+
+# グローバル変数としてPyAudioとストリームを保持
+p = pyaudio.PyAudio()
+stream = None
+
+def initialize_audio_stream(sample_rate: int):
+    """音声ストリームを初期化"""
+    global stream
+    if stream is None:
+        stream = p.open(format=pyaudio.paInt16,
+                        channels=1,
+                        rate=sample_rate,
+                        output=True)
+
+def play_audio_data_with_pyaudio(audio_data: np.ndarray):
+    """pyaudioを使用して音声データを再生"""
+    if stream is not None:
+        stream.write(audio_data.tobytes())
+
+def close_audio_stream():
+    """音声ストリームを閉じる"""
+    global stream
+    if stream is not None:
+        stream.stop_stream()
+        stream.close()
+        stream = None
+    p.terminate()
 
 def split_16bit_to_4bits(binary_16bit: str) -> list:
     """16ビットの文字列を4ビットずつに分割"""
@@ -98,6 +126,9 @@ if __name__ == "__main__":
     try:
         print("キーボードの入力を監視中... (終了するには 'esc' キーを押してください)")
         
+        # 音声ストリームを初期化
+        initialize_audio_stream(SAMPLE_RATE)
+        
         # キー入力のイベントハンドラを設定
         keyboard.on_press(on_key_press)
         
@@ -110,4 +141,4 @@ if __name__ == "__main__":
         print(f"予期せぬエラーが発生しました: {e}")
     finally:
         print("プログラムを終了します。")
-        sd.stop()  # 終了時に再生を停止 
+        close_audio_stream()  # 終了時にストリームを閉じる
