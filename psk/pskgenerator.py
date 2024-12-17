@@ -143,6 +143,29 @@ def generate_psk_signal(output_file: str, sample_rate: int,
     save_wav_file(combined_audio, sample_rate, output_file)
     print(f"複数のメッセージを埋め込んだ位相シフトサイン波を {output_file} に生成しました。")
 
+def generate_psk_signal_in_memory(sample_rate: int, waves: List[Dict]) -> np.ndarray:
+    """PSK信号をメモリ上で生成して返す"""
+    print(f"パラメータ設定:")
+    for i, param in enumerate(waves, 1):
+        print(f"パラメータセット {i}:")
+        print(f"  周波数: {param['frequency']}Hz")
+        print(f"  位相反転間隔: {param['switch_interval']}周期")
+        print(f"  メッセージ: '{param['binary_message']}'")
+    print(f"サンプリングレート: {sample_rate}Hz")
+
+    # 各波形の生成と合成
+    audio_signals = [
+        generate_phase_shifting_sine(
+            param['frequency'], 
+            sample_rate, 
+            param['switch_interval'], 
+            param['binary_message']
+        ) for param in waves
+    ]
+    
+    combined_audio = combine_audio_signals(*audio_signals, waves=waves)
+    return combined_audio
+
 if __name__ == "__main__":
     output_file = "wav/output.wav"
     sample_rate = 44100
