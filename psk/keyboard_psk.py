@@ -107,7 +107,7 @@ def on_key_press(event):
         
         # 生成した音声データを直接再生
         audio_data = generate_psk_signal_in_memory(SAMPLE_RATE, waves)
-        play_audio_data(audio_data, SAMPLE_RATE)
+        play_audio_data_with_pyaudio(audio_data)
         
         # デバッグ情報を表示
         print(f"文字: '{character}'")
