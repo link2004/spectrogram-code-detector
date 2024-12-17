@@ -35,10 +35,19 @@ def main():
     # 生成する信号のパラメータ
     # frequencyはサンプリングレートの1/4以下の約数にする
     waves = [
-        {"frequency": 8820, "switch_interval": 110, "binary_message": "101011"},
         {"frequency": 4410, "switch_interval": 55, "binary_message": "010011"},
+        {"frequency": 3308, "switch_interval": 41, "binary_message": "101011"},
+        {"frequency": 2756, "switch_interval": 34, "binary_message": "100101"},
         {"frequency": 2205, "switch_interval": 28, "binary_message": "110100"},
     ]
+
+    # waves = [
+    #     {"frequency": 3780, "switch_interval": 42, "binary_message": "010110"},
+    #     {"frequency": 3150, "switch_interval": 35, "binary_message": "010110"},
+    #     {"frequency": 2520, "switch_interval": 28, "binary_message": "010110"},
+    
+    #     {"frequency": 1890, "switch_interval": 21, "binary_message": "101011"},
+    # ]
 
     # 検出用のパラメータ（生成時のパラメータと一致させる）
     detection_parameters = [
