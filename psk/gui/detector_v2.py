@@ -16,18 +16,11 @@ def setup_audio_device():
 
 ## 波の設定
 WAVES = [
-    {"frequency": 4410, "switch_interval": 55, "initial_gain": 100, "max_gain": 500, "bandwidth": 900},
-    {"frequency": 3308, "switch_interval": 41, "initial_gain": 100, "max_gain": 500, "bandwidth": 500},
-    {"frequency": 2756, "switch_interval": 34, "initial_gain": 100, "max_gain": 500, "bandwidth": 450},
-    {"frequency": 2205, "switch_interval": 28, "initial_gain": 100, "max_gain": 500, "bandwidth": 400},
+    {"frequency": 4410, "switch_interval": 55, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
+    {"frequency": 3308, "switch_interval": 41, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
+    {"frequencay": 2205, "switch_interval": 28, "initial_gain": 100, "max_gain": 500, "bandwidth": 441},
 ]
 
-# WAVES = [
-#     {"frequency": 3780, "switch_interval": 42, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
-#     {"frequency": 3150, "switch_interval": 35, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
-#     {"frequency": 2520, "switch_interval": 28, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
-#     {"frequency": 1890, "switch_interval": 21, "initial_gain": 100, "max_gain": 500, "bandwidth": 630},
-# ]
 
 ## ゲイン
 TARGET_MAX = 0.8  # 目標最大値
