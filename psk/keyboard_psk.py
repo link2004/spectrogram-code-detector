@@ -99,10 +99,10 @@ def on_key_press(event):
         
         # 波形パラメータを設定
         waves = [
-            {"frequency": 4410, "switch_interval": 55, "binary_message": four_bits[0]},
-            {"frequency": 3308, "switch_interval": 41, "binary_message": four_bits[1]},
-            {"frequency": 2756, "switch_interval": 34, "binary_message": four_bits[2]},
-            {"frequency": 2205, "switch_interval": 28, "binary_message": four_bits[3]},
+            {"frequency": 4410, "switch_interval": 110, "binary_message": four_bits[0]},
+            {"frequency": 3308, "switch_interval": 82, "binary_message": four_bits[1]},
+            {"frequency": 2756, "switch_interval": 68, "binary_message": four_bits[2]},
+            {"frequency": 2205, "switch_interval": 56, "binary_message": four_bits[3]},
         ]
         
         # 生成した音声データを直接再生
